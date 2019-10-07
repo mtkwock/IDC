@@ -1,0 +1,1398 @@
+/**
+ * Written by Scarlet#1115 on Discord.
+ * Please do not redistribute yet... This is stil in Alpha.
+ *
+ * NOTE: Only do this if you trust the creator of this file.
+ *   Doing this in general can be dangrous if you don't trust
+ *   the source of the code.
+ *
+ * This is currently meant to be pasted into console in ilmina.com.
+ * 1) To open console, Right-Click anywhere on the page and click "Inspect" or "Inspect Element".
+ * 2) At the top of the window or pane that was opened, click the Console tab.
+ * 3) Copy this entire file and paste into Console and press "Enter."
+ * 4) The tool will appear at the bottom of the page.
+ *
+ * To use
+ * Change Monster:
+ * 1) Click on the monster you wish to change on the team.
+ * 2) On the left pane in the Monster field, change the ID to the monster you want.
+ * 3) The left pane will control all aspects of the monster.
+ *    I hope these are self-explanatory.  If not, please let me know.
+ * View Monster Stats
+ * 1) Click the [DEBUG] button above the monster editing pane.
+ *    This will print the monster's stats in solo and multiplay in the console.
+ *    NOTE: If you find an inconsistency with the game, please let me know.
+ *          I want to make sure my rounding and calculations are correct.
+ */
+
+{
+if (!vm) {
+  console.error('VM not yet loaded!');
+}
+
+
+// TODO: Put all ids as constants in here so that I can access them reliably.
+const Id = {
+  CONTAINER: 'idc-container',
+};
+
+function annotateMonsterScaling() {
+  if (window.localStorage.annotatedScaling) {
+    return;
+  }
+  const VALID_SCALES = new Set([0.7, 1.0, 1, 1.5]);
+  for (const id in vm.model.cards) {
+    const c = vm.model.cards[id];
+    const [hpGrowth, atkGrowth, rcvGrowth] = [c.unknownData[2], c.unknownData[3], c.unknownData[4]];
+    if (!VALID_SCALES.has(hpGrowth)) {
+      console.warn(`Invalid scaling found! ${hpGrowth} Monster: ${id}`);
+    } else {
+      c.hpGrowth = hpGrowth;
+    }
+    if (!VALID_SCALES.has(atkGrowth)) {
+      console.warn(`Invalid scaling found! ${atkGrowth} Monster: ${id}`);
+    } else {
+      c.atkGrowth = atkGrowth;
+    }
+    if (!VALID_SCALES.has(rcvGrowth)) {
+      console.warn(`Invalid scaling found! ${rcvGrowth} Monster: ${id}`);
+    } else {
+      c.rcvGrowth = rcvGrowth;
+    }
+  }
+  window.localStorage.annotatedScaling = true;
+}
+
+annotateMonsterScaling();
+
+function validatePlus(value) {
+  if (value < 0 || value > 99) {
+    console.error("Invalid Plus value: " + String(value));
+    return 0;
+  }
+  return Math.round(value);
+}
+
+const Attribute = {
+  FIRE: 0,
+  WATER: 1,
+  WOOD: 2,
+  LIGHT: 3,
+  DARK: 4,
+}
+
+const AWAKENING_SCALE = 0.7;
+
+// 11x 1-slot Latents
+// 22 2-slot
+const Latent = {
+  HP: 1, ATK: 2, RCV: 3,
+  TIME: 4,
+  AUTOHEAL: 5,
+  RESIST_FIRE: 6, RESIST_WATER: 7, RESIST_WOOD: 8,
+  RESIST_LIGHT: 9, RESIST_DARK: 10,
+  SDR: 11,
+  EVO: 12, AWOKEN: 13, ENHANCED: 14, REDEEMABLE: 15,
+
+  GOD: 16, DRAGON: 17, DEVIL: 18, MACHINE: 19,
+  BALANCED: 20, ATTACKER: 21, PHYSICAL: 22, HEALER: 23,
+
+
+  ALL_STATS: 24,
+  HP_PLUS: 25, ATK_PLUS: 26, RCV_PLUS: 27,
+  TIME_PLUS: 28,
+  RESIST_FIRE_PLUS: 29,
+  RESIST_WATER_PLUS: 30,
+  RESIST_WOOD_PLUS: 31,
+  RESIST_LIGHT_PLUS: 32,
+  RESIST_DARK_PLUS: 33,
+};
+
+const LATENT_HP = new Map([
+  [Latent.HP, 0.015],
+  [Latent.HP_PLUS, 0.045],
+  [Latent.ALL_STATS, 0.03],
+]);
+
+const LATENT_ATK = new Map([
+  [Latent.ATK, 0.01],
+  [Latent.ATK_PLUS, 0.03],
+  [Latent.ALL_STATS, 0.02],
+]);
+
+const LATENT_RCV = new Map([
+  [Latent.RCV, 0.1],
+  [Latent.HP_PLUS, 0.3],
+  [Latent.ALL_STATS, 0.2],
+]);
+
+const LATENT_OTHER = new Map([
+  [Latent.AUTOHEAL, 0.15],
+  [Latent.TIME, 0.05],
+  [Latent.TIME_PLUS, 0.12],
+  [Latent.RESIST_FIRE, 0.01],
+  [Latent.RESIST_WATER, 0.01],
+  [Latent.RESIST_WOOD, 0.01],
+  [Latent.RESIST_LIGHT, 0.01],
+  [Latent.RESIST_DARK, 0.01],
+  [Latent.RESIST_FIRE_PLUS, 0.01],
+  [Latent.RESIST_WATER_PLUS, 0.01],
+  [Latent.RESIST_WOOD_PLUS, 0.01],
+  [Latent.RESIST_LIGHT_PLUS, 0.01],
+  [Latent.RESIST_DARK_PLUS, 0.01],
+]);
+
+// These awakenings cost 2 slots.
+const LatentSuper = new Set([
+  Latent.EVO, Latent.AWOKEN, Latent.ENHANCED, Latent.REDEEMABLE,
+  Latent.GOD, Latent.DRAGON, Latent.DEVIL, Latent.MACHINE,
+  Latent.BALANCED, Latent.ATTACKER, Latent.PHYSICAL, Latent.HEALER,
+
+  Latent.ALL_STATS, Latent.HP_PLUS, Latent.ATK_PLUS,
+  Latent.RCV_PLUS, Latent.TIME_PLUS,
+  Latent.RESIST_FIRE_PLUS, Latent.RESIST_WATER_PLUS, Latent.RESIST_WOOD_PLUS,
+  Latent.RESIST_LIGHT_PLUS, Latent.RESIST_DARK_PLUS,
+]);
+
+const Awakening = {
+  HP: 1, ATK: 2, RCV: 3,
+  RESIST_FIRE: 4, RESIST_WATER: 5, RESIST_WOOD: 6, RESIST_LIGHT: 7, RESIST_DARK: 8,
+  AUTOHEAL: 9,
+  RESIST_BIND: 10, RESIST_BLIND: 11, RESIST_JAMMER: 12, RESIST_POISON: 13,
+  OE_FIRE: 14, OE_WATER: 15, OE_WOOD: 16, OE_LIGHT: 17, OE_DARK: 18,
+  TIME: 19,
+  RECOVER_BIND: 20,
+  SKILL_BOOST: 21,
+  ROW_FIRE: 22, ROW_WATER: 23, ROW_WOOD: 24, ROW_LIGHT: 25, ROW_DARK: 26,
+  TPA: 27,
+  SBR: 28,
+  OE_HEART: 29,
+  MULTIBOOST: 30,
+  DRAGON: 31, GOD: 32, DEVIL: 33, MACHINE: 34,
+  BALANCED: 35, ATTACKER: 36, PHYSICAL: 37, HEALER: 38,
+  EVO: 39, AWAKENING: 40, ENHANCED: 41, REDEEMABLE: 42,
+  COMBO_7: 43,
+  GUARD_BREAK: 44,
+  BONUS_ATTACK: 45,
+  TEAM_HP: 46, TEAM_RCV: 47,
+  VDP: 48,
+  AWOKEN_ASSIST: 49,
+  BONUS_ATTACK_SUPER: 50,
+  SKILL_CHARGE: 51,
+  RESIST_BIND_PLUS: 52,
+  TIME_PLUS: 53,
+  RESIST_CLOUD: 54, RESIST_TAPE: 55,
+  SKILL_BOOST_PLUS: 56,
+  HP_GREATER: 57, HP_LESS: 58,
+  L_GUARD: 59, L_UNLOCK: 60,
+  COMBO_10: 61, COMBO_ORB: 62,
+  VOICE: 63,
+  SOLOBOOST: 64,
+  HP_MINUS: 65, ATK_MINUS: 66, RCV_MINUS: 67,
+  RESIST_BLIND_PLUS: 68, RESIST_POISON_PLUS: 69, RESIST_JAMMER_PLUS: 70,
+  JAMMER_BOOST: 71, POISON_BOOST: 72,
+};
+
+const AWAKENING_BONUS = new Map([
+  [Awakening.HP, 500],
+  [Awakening.HP_MINUS, -5000],
+  [Awakening.ATK, 100],
+  [Awakening.ATK_MINUS, -1000],
+  [Awakening.RCV, 200],
+  [Awakening.RCV, -2000],
+
+]);
+
+class KeyCounter {
+  constructor(counts = undefined) {
+    this.counts = counts || {};
+  }
+
+  count(key, add = 1) {
+    if (!(key in this.counts)) {
+      this.counts[key] = add;
+    } else {
+      this.counts[key] += add;
+    }
+  }
+
+  get(key) {
+    if (!(key in this.counts)) {
+      return 0;
+    } else {
+      return this.counts[key];
+    }
+  }
+}
+
+
+function calcScaleStat(card, max, min, level, growth) {
+  if (level < 100) {
+    const diff = max - min;
+    const frac = (level - 1) / (card.maxLevel - 1);
+    const added = Math.round(Math.pow(frac, growth) * diff);
+    return min + added;
+  } else {
+    const multiplier = 1 + card.limitBreakStatGain / 100 * (level - 99) / 11;
+    return Math.round(max * multiplier);
+  }
+}
+
+
+class MonsterInstance {
+  constructor(id = null) {
+    // ID of this monster according to Ilmina.
+    this.id = id;
+
+    // If attribute is to >-1, this monster's attribute is changed
+    // to that attribute via an active.
+    this.attribute = -1;
+    this.level = 1;
+    this.awakenings = 0;
+    this.latents = [];
+    this.superAwakeningIdx = -1;
+    this.hpPlus = 0;
+    this.atkPlus = 0;
+    this.rcvPlus = 0;
+
+    this.inheritId = -1;
+    this.inheritLevel = 1;
+    this.inheritPlussed = false;
+
+    this.card = null;
+
+    if (this.id) {
+      this.setId(id);
+    }
+  }
+
+  copyFrom(otherInstance) {
+    this.id = otherInstance.id;
+    this.level = otherInstance.level;
+    this.awakenings = otherInstance.awakenings;
+    this.latents = [...otherInstance.latents];
+    this.superAwakeningIdx = otherInstance.superAwakeningIdx;
+    this.hpPlus = otherInstance.hpPlus;
+    this.atkPlus = otherInstance.atkPlus;
+    this.rcvPlus = otherInstance.rcvPlus;
+
+    this.inheritId = otherInstance.inheritId;
+    this.inheritLevel = otherInstance.inheritLevel;
+    this.inheritPlussed = otherInstance.inheritPlussed;
+    this.setId(id);
+  }
+
+  swap(otherInstance) {
+    const temp = new MonsterInstance();
+    temp.copyFrom(this);
+    this.copyFrom(otherInstance);
+    otherInstance.copyFrom(temp);
+  }
+
+  setId(value) {
+    if (!(value in vm.model.cards)) {
+      console.warn('Invalid monster id: ' + String(value));
+      return;
+    }
+    this.id = value;
+    const c = this.getCard();
+
+    // If the level is above the max level of the new card OR
+    // the level is maxed out from previously, set the level to c's max level.
+    if (this.level > c.maxLevel && !c.isLimitBreakable ||
+        !this.card || this.level == this.card.maxLevel && this.level < c.maxLevel) {
+      this.setLevel(c.maxLevel);
+    }
+
+    // If the awakening level is above the max level of the new card OR
+    // the awakening level is maxed out from previously, set awakeing level to
+    // c's max awakening level.
+    if (this.awakenings > c.awakenings.length ||
+        !this.card || this.awakenings == this.card.awakenings.length) {
+      this.awakenings = c.awakenings.length;
+    }
+
+    // Attempt to copy the current latents.
+    const latentCopy = this.latents;
+    this.latents = [];
+    for (const latent of latentCopy) {
+      this.addLatent(latent);
+    }
+
+    // If c has the same SA as our current one, keep that.
+    if (this.superAwakeningIdx > -1 && this.card) {
+      const currentSa = this.card.superAwakenings[this.superAwakeningIdx];
+      if (c.superAwakenings.includes(currentSa)) {
+        this.superAwakeningIdx = c.superAwakenings.indexOf(currentSa);
+      } else {
+        this.superAwakeningIdx = -1;
+      }
+    } else {
+      this.superAwakeningIdx = -1;
+    }
+
+    if (!CardAssets.canPlus(c)) {
+      this.setHpPlus(0);
+      this.setAtkPlus(0);
+      this.setRcvPlus(0);
+      this.inheritId = -1;
+    }
+
+    this.card = c;
+  }
+
+  addLatent(latent) {
+    const c = this.getCard();
+    // Only monsters capable of taking latent killers can take latents.
+    if (!c.latentKillers.length) {
+      return;
+    }
+    const totalSlots = [...this.latents, latent].reduce((total, latent) => {
+      return total + LatentSuper.has(latent) ? 2 : 1;
+    }, 0);
+    if (totalSlots > 6) return false;
+    if (latent >= 16 && latent <= 23 && !c.latentKillers.includes(latent - 11)) {
+      return;
+    }
+    this.latents.push(latent);
+  }
+
+  removeLatent(latentIdx) {
+    if (latentIdx >= this.latents.length) {
+      console.warn(`latent index out of range: ${latentIdx}`)
+      return;
+    }
+    this.latents = [...this.latents.slice(0, latentIdx), ...this.latents.slice(latentIdx + 1)];
+  }
+
+  setLevel(value) {
+    value = Number(value);
+    if (value < 0 || value > 110) {
+      console.warn('Invalid monster level: ' + String(value));
+      return;
+    }
+    const c = this.getCard();
+    if (value > c.maxLevel && !c.isLimitBreakable) {
+      console.warn('Monster level exceeds max level: ' + String(value));
+      return;
+    }
+    this.level = Math.round(value);
+  }
+
+  setHpPlus(value) {
+    this.hpPlus = validatePlus(value);
+  }
+
+  setAtkPlus(value) {
+    this.atkPlus = validatePlus(value);
+  }
+
+  setRcvPlus(value) {
+    this.rcvPlus = validatePlus(value);
+  }
+
+  getCard() {
+    return vm.model.cards[this.id];
+  }
+
+  getInheritCard() {
+    if (this.inheritId == -1) {
+      return null;
+    }
+    return vm.model.cards[this.inheritId];
+  }
+
+  isSuperAwakeningActive(isMultiplayer) {
+    return (!isMultiplayer && this.level > 99 &&
+      this.hpPlus == 99 && this.atkPlus == 99 && this.rcvPlus > 99);
+  }
+
+  /**
+   * Gets an array of awakenings filtered by the given filterSet.
+   * @param {?bool} isMultiplayer Whether this is multiplayer or not.
+   * @param {?Set} filterSet A set to restrict awakenings to.
+   */
+  getAwakenings(isMultiplayer = false, filterSet = undefined) {
+    let filterFn = (awakening) => true;
+    if (filterSet) {
+      filterFn = (awakening) => filterSet.has(awakening);
+    }
+    const c = this.getCard();
+    let awakenings = c.awakenings.slice(0, this.awakenings);
+    if (this.superAwakeningIdx > -1 && this.isSuperAwakeningActive(isMultiplayer)) {
+      awakenings.push(c.superAwakenings[this.superAwakeningIdx]);
+    }
+    if (this.inheritId > -1 && vm.model.cards[this.inheritId].awakenings[0] == Awakening.AWOKEN_ASSIST) {
+      for (const awakening of vm.model.cards[this.inheritId].awakenings) {
+        awakenings.push(awakening);
+      }
+    }
+    return awakenings.filter(filterFn);
+  }
+
+  countAwakening(awakening, isMultiplayer = false) {
+    return this.getAwakenings(isMultiplayer, new Set([awakening])).length;
+  }
+
+  getLatents(filterSet = undefined) {
+    let filterFn = (awakening) => true;
+    if (filterSet) {
+      filterFn = (awakening) => filterSet.has(awakening);
+    }
+    return this.latents.filter(filterFn);
+  }
+
+  calcScaleStat(max, min, growth) {
+    const card = this.getCard();
+    return calcScaleStat(card, max, min, this.level, growth);
+  }
+
+  getHp(isMultiplayer = true, awakeningsActive = true) {
+    const c = this.getCard();
+    let hp = this.calcScaleStat(c.maxHp, c.minHp, c.hpGrowth);
+    if (awakeningsActive) {
+      const latentMultiplier = this
+          .getLatents(new Set([Latent.HP, Latent.HP_PLUS, Latent.ALL_STATS]))
+          .reduce((total, latent) => total + LATENT_HP.get(latent), 1);
+      hp *= latentMultiplier;
+      const awakeningAdder = this
+          .getAwakenings(isMultiplayer, new Set([Awakening.HP, Awakening.HP_MINUS]))
+          .reduce((total, awakening) => total + AWAKENING_BONUS.get(awakening), 0);
+      hp += awakeningAdder;      
+    }
+
+    const plusAdder = this.hpPlus * 10;
+    hp += plusAdder;
+
+    const inherit = this.getInheritCard();
+    if (inherit && c.attribute == inherit.attribute) {
+      const inheritBonus = calcScaleStat(
+        inherit, inherit.maxHp, inherit.minHp, this.inheritLevel, inherit.hpGrowth) + (this.inheritPlussed ? 990 : 0);
+      hp += Math.round(inheritBonus * 0.1);
+    }
+
+    if (isMultiplayer) {
+      const multiboostMultiplier = 1.5 ** this.countAwakening(Awakening.MULTIBOOST, isMultiplayer);
+      hp *= multiboostMultiplier;
+    }
+
+    return Math.max(Math.round(hp), 1);
+  }
+
+  getAtk(isMultiplayer = true, awakeningsActive = true) {
+    const c = this.getCard();
+    let atk = this.calcScaleStat(c.maxAtk, c.minAtk, c.atkGrowth);
+    console.log(atk);
+    if (awakeningsActive) {
+      const latentMultiplier = this
+          .getLatents(new Set([Latent.ATK, Latent.ATK_PLUS, Latent.ALL_STATS]))
+          .reduce((total, latent) => total + LATENT_ATK.get(latent), 1);
+      atk *= latentMultiplier;
+      const awakeningAdder = this
+          .getAwakenings(isMultiplayer, new Set([Awakening.ATK, Awakening.ATK_MINUS]))
+          .reduce((total, awakening) => total + AWAKENING_BONUS.get(awakening), 0);
+      atk += awakeningAdder;      
+    }
+
+    const plusAdder = this.atkPlus * 5;
+    atk += plusAdder;
+
+    const inherit = this.getInheritCard();
+    if (inherit && c.attribute == inherit.attribute) {
+      const inheritBonus = calcScaleStat(
+        inherit, inherit.maxAtk, inherit.minAtk, this.inheritLevel, inherit.atkGrowth) + (this.inheritPlussed ? 495 : 0);
+      atk += Math.round(inheritBonus * 0.05);
+    }
+
+    if (isMultiplayer && awakeningsActive) {
+      const multiboostMultiplier = 1.5 ** this.countAwakening(Awakening.MULTIBOOST, isMultiplayer);
+      atk *= multiboostMultiplier;
+    }
+
+    return Math.max(Math.round(atk), 1);
+  }
+
+  getRcv(isMultiplayer = true, awakeningsActive = true) {
+    const c = this.getCard();
+    let rcv = this.calcScaleStat(c.maxRcv, c.minRcv, c.rcvGrowth);
+    if (awakeningsActive) {
+      const latentMultiplier = this
+          .getLatents(new Set([Latent.RCV, Latent.RCV_PLUS, Latent.ALL_STATS]))
+          .reduce((total, latent) => total + LATENT_RCV.get(latent), 1);
+      rcv *= latentMultiplier;
+      const awakeningAdder = this
+          .getAwakenings(isMultiplayer, new Set([Awakening.RCV, Awakening.RCV_MINUS]))
+          .reduce((total, awakening) => total + AWAKENING_BONUS.get(awakening), 0);
+      rcv += awakeningAdder;      
+    }
+
+    const plusAdder = this.rcvPlus * 3;
+    rcv += plusAdder;
+
+    const inherit = this.getInheritCard();
+    if (inherit && c.attribute == inherit.attribute) {
+      const inheritBonus = calcScaleStat(
+        inherit, inherit.maxRcv, inherit.minRcv, this.inheritLevel, inherit.rcvGrowth) + (this.inheritPlussed ? 297 : 0);
+      rcv += Math.round(inheritBonus * 0.15);
+    }
+
+    if (isMultiplayer && awakeningsActive) {
+      const multiboostMultiplier = 1.5 ** this.countAwakening(Awakening.MULTIBOOST, isMultiplayer);
+      rcv *= multiboostMultiplier;
+    }
+
+    return Math.round(rcv);
+  }
+
+  createIcon(scaling = 1) {
+    const card = this.id ? this.getCard() : vm.model.cards[4014];
+    const descriptionMonster = CardAssets.getIconImageData(card);
+    const monsterEl = document.createElement('a');
+    monsterEl.className = 'idc-monster-icon';
+    monsterEl.style.display = 'inline-block';
+    monsterEl.style.backgroundRepeat = 'no-repeat';
+
+    const attributeEl = document.createElement('a');
+    attributeEl.className = 'idc-monster-icon-attribute';
+    attributeEl.style.display = 'inline-block';
+    attributeEl.style.backgroundRepeat = 'no-repeat';
+    monsterEl.appendChild(attributeEl);
+
+    const subattributeEl = document.createElement('a');
+    subattributeEl.className = 'idc-monster-icon-subattribute';
+    subattributeEl.style.display = 'inline-block';
+    subattributeEl.style.backgroundRepeat = 'no-repeat';
+    attributeEl.appendChild(subattributeEl);
+
+    const inheritEl = document.createElement('a');
+    inheritEl.className = 'idc-monster-icon-inherit';
+    inheritEl.style.display = 'inline-block';
+    inheritEl.style.backgroundRepeat = 'no-repeat';
+    inheritEl.style.top = '-25%';
+    inheritEl.style.position = 'relative';
+
+    const inheritAttributeEl = document.createElement('a');
+    inheritAttributeEl.className = 'idc-monster-icon-inherit-attribute';
+    inheritAttributeEl.style.display = 'inline-block';
+    inheritAttributeEl.style.backgroundRepeat = 'no-repeat';
+    inheritEl.appendChild(inheritAttributeEl);
+
+    const inheritSubattributeEl = document.createElement('a');
+    inheritSubattributeEl.className = 'idc-monster-icon-inherit-subattribute';
+    inheritSubattributeEl.style.display = 'inline-block';
+    inheritSubattributeEl.style.backgroundRepeat = 'no-repeat';
+    inheritAttributeEl.appendChild(inheritSubattributeEl);
+
+    monsterEl.appendChild(inheritEl);
+
+    this.updateIcon(monsterEl, scaling);
+
+    return monsterEl;
+  }
+
+  updateIcon(monsterEl, scaling = 1) {
+    const card = this.id ? this.getCard() : vm.model.cards[4014];
+
+    const fullWidth = `${102 * scaling}px`;
+
+    const descriptionMonster = CardAssets.getIconImageData(card);
+    monsterEl.style.width = fullWidth;
+    monsterEl.style.height = fullWidth;
+    monsterEl.style.backgroundSize = `${descriptionMonster.baseWidth * scaling}px ${descriptionMonster.baseHeight * scaling}px`;
+    monsterEl.style.backgroundImage = `url(${descriptionMonster.url})`;
+    monsterEl.style.backgroundPosition = `-${descriptionMonster.offsetX * scaling}px -${descriptionMonster.offsetY * scaling}px`;
+
+    const attributeEl = monsterEl.getElementsByClassName('idc-monster-icon-attribute')[0];
+    const descriptionAttribute = CardUiAssets.getIconFrame(card.attribute, false, vm);
+    attributeEl.style.width = fullWidth;
+    attributeEl.style.height = fullWidth;
+    attributeEl.style.backgroundSize = `${512 * scaling}px ${256 * scaling}px`;
+    attributeEl.style.backgroundImage = `url(${descriptionAttribute.url})`;
+    attributeEl.style.backgroundPosition = `-${descriptionAttribute.offsetX * scaling}px -${descriptionAttribute.offsetY * scaling}px`;
+
+    const descriptionSubattribute = CardUiAssets.getIconFrame(card.subattribute, true, vm);
+    const subattributeEl = monsterEl.getElementsByClassName('idc-monster-icon-subattribute')[0];
+    if (descriptionSubattribute) {
+      subattributeEl.style.width = fullWidth;
+      subattributeEl.style.height = fullWidth;
+      subattributeEl.style.backgroundSize = `${512 * scaling}px ${256 * scaling}px`;
+      subattributeEl.style.backgroundImage = `url(${descriptionSubattribute.url})`;
+      subattributeEl.style.backgroundPosition = `-${descriptionSubattribute.offsetX * scaling}px -${descriptionSubattribute.offsetY * scaling}px`;      
+      subattributeEl.style.visibility = 'visible';
+    } else {
+      subattributeEl.style.visibility = 'hidden';
+    }
+
+    const inheritEl = monsterEl.getElementsByClassName('idc-monster-icon-inherit')[0];
+    if (this.inheritId >= 0) {
+      const inheritCard = this.inheritId > 0 ? this.getInheritCard() : vm.model.cards[4014];
+      const inheritAttributeEl = inheritEl.getElementsByClassName('idc-monster-icon-inherit-attribute')[0];
+      const inheritSubattributeEl = inheritEl.getElementsByClassName('idc-monster-icon-inherit-subattribute')[0];
+      const descriptionInherit = CardAssets.getIconImageData(inheritCard);
+      const descriptionInheritAttribute = CardUiAssets.getIconFrame(inheritCard.attribute, false, vm);
+      const descriptionInheritSubattribute = CardUiAssets.getIconFrame(inheritCard.subattribute, true, vm);
+      const halfWidth = `${51 * scaling}px`;
+      inheritEl.style.width = halfWidth;
+      inheritAttributeEl.style.width = halfWidth;
+      inheritSubattributeEl.style.width = halfWidth;
+      inheritEl.style.height = halfWidth;
+      inheritAttributeEl.style.height = halfWidth;
+      inheritSubattributeEl.style.height = halfWidth;
+      inheritEl.style.backgroundSize = `${descriptionInherit.baseWidth / 2 * scaling}px ${descriptionInherit.baseHeight / 2 * scaling}px`;
+      inheritAttributeEl.style.backgroundSize = `${512 / 2 * scaling}px ${256 / 2 * scaling}px`;
+      inheritEl.style.backgroundImage = `url(${descriptionInherit.url})`;
+      inheritAttributeEl.style.backgroundImage = `url(${descriptionInheritAttribute.url})`;
+      inheritEl.style.backgroundPosition = `-${descriptionInherit.offsetX * 0.5 * scaling}px -${descriptionInherit.offsetY * 0.5 * scaling}px`;
+      inheritAttributeEl.style.backgroundPosition = `-${descriptionInheritAttribute.offsetX * 0.5 * scaling}px -${descriptionInheritAttribute.offsetY * 0.5 * scaling}px`;
+      inheritEl.style.visibility = 'visible';
+      if (descriptionInheritSubattribute) {
+        inheritSubattributeEl.style.backgroundSize = `${512 / 2 * scaling}px ${256 / 2 * scaling}px`;
+        inheritSubattributeEl.style.backgroundImage = `url(${descriptionInheritSubattribute.url})`;
+        inheritSubattributeEl.style.backgroundPosition = `-${descriptionInheritSubattribute.offsetX * 0.5 * scaling}px -${descriptionInheritSubattribute.offsetY * 0.5 * scaling}px`;      
+        inheritSubattributeEl.style.visibility = 'visible';
+      } else {
+        inheritSubattributeEl.style.visibility = 'hidden';
+      }
+    } else {
+      inheritEl.style.visibility = 'hidden';
+    }
+  }
+}
+
+function testAnother() {
+  const another = new MonsterInstance(2568);
+  another.setLevel(110);
+  another.inheritId = 4723;
+  another.inheritPlussed = true;
+  another.awakenings = 9;
+  another.addLatent(Latent.TIME_PLUS); another.addLatent(Latent.DEVIL);
+  another.addLatent(Latent.DEVIL);
+  another.setHpPlus(99);
+  another.setAtkPlus(99);
+  another.setRcvPlus(99);
+  console.log(another);
+  if (another.getHp(false) != 6259) {
+    throw 'Athena\'s hp is wrong.';
+  }
+  // console.log(another.getHp(true));
+  if (another.getAtk(false) != 4926) {
+    throw 'Athena\'s atk is wrong.';
+  }
+  // console.log(another.getAtk(true));
+  if (another.getRcv(false) != 363) {
+    throw 'Athena\'s rcv is wrong.';
+  }
+  // console.log(another.getRcv(true)); 
+}
+
+function testRoche() {
+  const roche = new MonsterInstance(4799);
+  roche.setLevel(110);
+  roche.addLatent(Latent.ATK_PLUS);
+  roche.addLatent(Latent.ATK_PLUS);
+  roche.addLatent(Latent.ATK_PLUS);
+  roche.inheritId = 4204;
+  roche.inheritLevel = 110;
+  roche.inheritPlussed = true;
+  roche.setHpPlus(99);
+  roche.setAtkPlus(99);
+  roche.setRcvPlus(99);
+  roche.awakenings = 7;
+  roche.superAwakeningIdx = 2;
+  console.log(roche);
+  if (roche.getHp() != 6698) {
+    throw 'Roche\'s hp is wrong.';
+  }
+  if (roche.getAtk() != 5165) {
+    throw 'Roche\'s atk is wrong.';
+  }
+  if (roche.getRcv() != 916) {
+    throw 'Roche\'s rcv is wrong.';
+  }
+}
+
+
+const Shape = {
+  AMORPHOUS: 0,
+  L: 1,
+  COLUMN_4: 2,
+  COLUMN_5: 3,
+  COLUMN_6: 4,
+  CROSS: 5,
+  SQUARE: 6,
+  ROW: 7,
+};
+
+function getAwakeningOffsets(awakeningNumber) {
+  const result = [0, -324];
+  if (awakeningNumber < 0 || awakeningNumber > 81) {
+    console.warn('Invalid awakening, returning unknown.');
+    return result;
+  }
+  result[0] -= (awakeningNumber % 11) * 36;
+  result[1] -= Math.floor(awakeningNumber / 11) * 36;
+  return result;
+}
+
+
+class Combo {
+  constructor(count, attribute, enhanced = 0, shape = Shape.AMORPHOUS) {
+    this.count = count;
+    this.attribute = attribute;
+    if (enhanced > count) {
+      console.warn(`Enhanced orbs cannot exceed orb count: ${enhanced} > ${count}`);
+      enhanced = count;
+    }
+    this.enhanced = enhanced;
+    if (shape == Shape.L && count != 5) {
+      console.warn(`L-shape must have 5 orbs, got ${count}`);
+      shape = shape.AMORPHOUS;
+    }
+    if (shape == Shape.COLUMN_4 && count != 4) {
+      console.warn(`Small column must have 4 orbs, got ${count}`);
+      shape = shape.AMORPHOUS;
+    }
+    if (shape == Shape.COLUMN_5 && count != 5) {
+      console.warn(`Column must have exactly 5 orbs, got ${count}`);
+      shape = shape.AMORPHOUS;
+    }
+    if (shape == Shape.COLUMN_6 && count != 6) {
+      console.warn(`Large column must have exactly 6 orbs, got ${count}`);
+      shape = shape.AMORPHOUS;
+    }
+    if (shape == Shape.CROSS && count != 5) {
+      console.warn(`Cross must have exactly 5 orbs, got ${count}`);
+      shape = shape.AMORPHOUS;
+    }
+    if (shape == Shape.SQUARE && count != 9) {
+      console.warn(`Square must have exactly 9 orbs, got ${count}`);
+      shape = shape.AMORPHOUS;
+    }
+    if (shape == Shape.ROW && count < 5) {
+      console.warn(`Row must have at least 5 orbs, 6 if medium, 7 if large, got ${count}`);
+      shape = shape.AMORPHOUS;
+    }
+    this.shape = shape;
+  }
+}
+
+
+class Idc {
+  constructor() {
+    /**
+     * All monsters.
+     * In 1P: Length is 6
+     *   0: Leader
+     *   1-4: Subs
+     *   5: Helper
+     * In 2P: Length is 10
+     *   0: P1 Leader / P2 Helper
+     *   1-4: P1 subs.
+     *   5: UNUSED
+     *   6: P2 Helper / P2 Leader
+     *   7-10: P2 subs.
+     *   11: UNUSED
+     * In 3P: Length is 18
+     *   0: P1 Leader
+     *   1-4: P1 subs
+     *   5: P1 Helper
+     *   6: P2 Leader
+     *   7-10: P2 subs
+     *   11: P2 Helper
+     *   12: P3 Leader
+     *   13-16: P3 Subs
+     *   17: P3 Helper
+     * @type {!Array<?MonsterInstance>}
+     */
+    this.monsters = [
+        new MonsterInstance(), new MonsterInstance(), new MonsterInstance(),
+        new MonsterInstance(), new MonsterInstance(), new MonsterInstance(),
+        new MonsterInstance(), new MonsterInstance(), new MonsterInstance(),
+        new MonsterInstance(), new MonsterInstance(), new MonsterInstance(),
+        new MonsterInstance(), new MonsterInstance(), new MonsterInstance(),
+        new MonsterInstance(), new MonsterInstance(), new MonsterInstance(),
+    ];
+
+    this.playerMode = 2;
+    this.activeTeamIdx = 0;
+
+    this.awakeningsActive = true;
+
+    // Set to 7 for 7x6 and 5 for 5x4. Defaults to 6x5.
+    this.boardWidth = 6;
+
+    this.combos = [];
+
+    this.monsterEditingIndex = 0;
+
+    this.teamForm = null;
+  }
+
+  setPlayerMode(newMode) {
+    if (newMode != 1 && newMode != 2 && newMode != 3) {
+      throw `Invalid player mode, must be 1, 2, or 3, got ${newMode}`;
+    }
+    if (this.playerMode == 2) {
+      /**
+       0 1 2 3  4 6
+       6 7 8 9 10 0
+       x x x x x x
+       ->
+       0 1 2 3  4  5
+       6 7 8 9 10 11
+       x x x x  x  x
+       */
+      if (newMode == 3) {
+        this.monsters[5].copyFrom(this.monsters[6]);
+        this.monsters[11].copyFrom(this.monster[0]);
+      }
+      if (newMode == 1) {
+        this.monsters[5].copyFrom(this.monsters[6]);
+      }
+    } else if (this.playerMode == 3) {
+    } else { // Handle 1P
+      if (newMode == 2) {
+        this.monsters[6].copyFrom(this.monsters[5]);
+      }
+    }
+
+    this.playerMode = newMode;
+
+    // TODO: Update UI to reflect this.
+  }
+
+  setActiveTeamIdx(idx) {
+    if (idx >= this.playerMode || idx < 0) {
+      throw `Index should be [0, ${this.players}]`;
+    }
+    this.activeTeamIdx = idx;
+    // TODO: Update visuals and calculations when this happens.
+  }
+
+  getMonsterIdx(teamIdx, localIdx) {
+    let idx = 6 * teamIdx + localIdx;
+    if (this.playerMode == 2 &&
+        (teamIdx == 0 && localIdx == 5) || (teamIdx == 1 && localIdx == 5)) {
+      idx = (1 - teamIdx) * 6;
+    }
+    return idx;
+  }
+
+  createTeamsForm() {
+    const playerTeams = document.createElement('table');
+    for (let i = 0; i < 3; i++) {
+      const playerTeam = document.createElement('tr');
+      playerTeam.id = `idc-team${i}`;
+      for (let j = 0; j < 6; j++) {
+        const playerMemberContainer = document.createElement('td');
+        playerMemberContainer.id = `idc-team${i}-member-container-${j}`;
+        // playerMemberContainer.innerText = `${i} - ${j}`;
+        const idx = this.getMonsterIdx(i, j);
+        const icon = this.monsters[idx].createIcon(0.75);
+        playerMemberContainer.onclick = () => {
+          this.monsterEditingIndex = idx;
+          this.reloadMonsterEditor();
+        }
+        playerMemberContainer.appendChild(icon);
+        playerTeam.appendChild(playerMemberContainer);
+      }
+      playerTeams.appendChild(playerTeam);
+    }
+    this.teamForm = playerTeams;
+    return playerTeams;
+  }
+
+  reloadMonsterIds() {
+
+  }
+
+  reloadAwakeningEditor() {
+    // Awakenings
+    const activeMonster = this.monsters[this.monsterEditingIndex];
+    for (let i = 0; i < 9; i++) {
+      const singleAwakeningSelector = document.getElementById(`idc-awakening-count-${i + 1}`);
+      if (activeMonster.id == null || i >= activeMonster.getCard().awakenings.length) {
+        singleAwakeningSelector.style.display = 'none';
+      } else if (i >= activeMonster.awakenings){
+        const awakening = activeMonster.getCard().awakenings[i];
+        const [x, y] = getAwakeningOffsets(awakening);
+        singleAwakeningSelector.style.backgroundPosition = `${x * AWAKENING_SCALE}px ${y * AWAKENING_SCALE}px`; // '0px -324px';
+        singleAwakeningSelector.style.display = 'inline-block';
+        singleAwakeningSelector.style.opacity = '0.5';
+      } else {
+        const awakening = activeMonster.getCard().awakenings[i];
+        const [x, y] = getAwakeningOffsets(awakening);
+        singleAwakeningSelector.style.backgroundPosition = `${x * AWAKENING_SCALE}px ${y * AWAKENING_SCALE}px`; // '0px -324px';
+        singleAwakeningSelector.style.display = 'inline-block';
+        singleAwakeningSelector.style.opacity = '1.0';
+      }
+    }
+
+    // Super Awakenings
+    for (let i = 0; i < 9; i++) {
+      const saSelector = document.getElementById(`idc-super-awakening-${i + 1}`);
+      let awakening = 0;
+      if (activeMonster.id == null) {
+        saSelector.style.display = 'none';
+        continue;
+      }
+      const superAwakenings = activeMonster.getCard().superAwakenings;
+      if (i > 0 && i <= superAwakenings.length) {
+        awakening = superAwakenings[i - 1];
+        const [x, y] = getAwakeningOffsets(awakening);
+        saSelector.style.backgroundPosition = `${x * AWAKENING_SCALE}px ${y * AWAKENING_SCALE}px`;
+      } else if (i > superAwakenings.length) {
+        awakening = -1;
+      }
+
+      if (this.monsters[this.monsterEditingIndex].superAwakeningIdx == i - 1) {
+        saSelector.style.opacity = 1.0;
+      } else {
+        saSelector.style.opacity = 0.5;
+      }
+
+      saSelector.style.display = awakening == -1 ? 'none' : 'inline-block';
+
+      // Position should be remapped whenever the monster changes.
+      saSelector.onclick = () => {
+        console.log(`Awakening ${i} clicked`);
+        this.monsters[this.monsterEditingIndex].superAwakeningIdx = i - 1;
+        this.reloadAwakeningEditor();
+      };
+    }
+
+    // Latent Awakenings.
+
+    let totalLatents = 0;
+    for (let i = 0; i < 6; i++) {
+      const currentLatentSelector = document.getElementById(`idc-selected-latent-awakening-${i}`);
+      if (totalLatents >= 6) {
+        currentLatentSelector.style.backgroundPosition = `0px 0px`;
+        currentLatentSelector.style.display = 'none';
+        continue;
+      } else if (i >= activeMonster.latents.length) {
+        currentLatentSelector.style.backgroundPosition = `0px 0px`;
+        currentLatentSelector.style.width = `${36 * AWAKENING_SCALE}px`;
+        currentLatentSelector.style.display = 'inline-block';
+        totalLatents++;
+        continue;
+      }
+      const latent = activeMonster.latents[i];
+      const isSuper = latent >= 11;
+      totalLatents += isSuper ? 2 : 1;
+      let offsetWidth, offsetHeight;
+      const x = isSuper ? (latent - 11) % 5 : latent;
+      const y = isSuper ? Math.floor((latent - 11) / 5 + 2) : 1;
+      if (isSuper) {
+        offsetWidth = x * -80 - 2;
+        offsetHeight = -36 * y;
+      } else {
+        offsetWidth = x * -36;
+        offsetHeight = -36;
+      }
+      currentLatentSelector.style.display = 'inline-block';
+      currentLatentSelector.style.width = `${(isSuper ? 76 : 36) * AWAKENING_SCALE}px`;
+      currentLatentSelector.style.backgroundPosition = `${offsetWidth * AWAKENING_SCALE}px ${offsetHeight * AWAKENING_SCALE}px`;
+      currentLatentSelector.onclick = () => {
+        console.log(`Latent Awakening ${i} clicked, should be removed.`);
+        this.monsters[this.monsterEditingIndex].removeLatent(i);
+        this.reloadAwakeningEditor();
+      };
+    }
+
+    // Enable/Disable Generic Killers. (Evo, Awakening, Enhance, Redeemable.)
+    for (let i = 12; i < 16; i++) {
+      const latentSelector = document.getElementById(`idc-latent-awakening-${i + 1}`);
+      if (activeMonster.id > 0 && activeMonster.getCard().latentKillers.length > 0) {
+        latentSelector.style.opacity = '1.0';        
+      } else {
+        latentSelector.style.opacity = '0.5';        
+      }
+    }
+    // Enable/Disable Other Killers based on type availability.
+    for (let i = 16; i <= 23; i++) {
+      const latentSelector = document.getElementById(`idc-latent-awakening-${i + 1}`);
+      if (activeMonster.id > 0 && activeMonster.getCard().latentKillers.includes(i - 11)) {
+        latentSelector.style.opacity = '1.0';
+      } else {
+        latentSelector.style.opacity = '0.5';
+      }
+    }
+  }
+
+  reloadMonsterEditor() {
+    console.warn('Not implemented!');
+    // Reload Monster IDs
+    // Reload levels
+    // Reload Plusses
+    // Reload Awakenings
+    this.reloadAwakeningEditor();
+ }
+
+  reloadTeamIcons() {
+    for (let i = 0; i < this.playerMode; i++) {
+      for (let j = 0; j < 6; j++) {
+        const playerMemberContainer = document.getElementById(`idc-team${i}-member-container-${j}`).firstChild;
+        const idx = this.getMonsterIdx(i, j);
+        this.monsters[idx].updateIcon(playerMemberContainer, 0.75);
+        playerMemberContainer.onclick = () => {
+          this.monsterEditingIndex = idx;
+          this.reloadMonsterEditor();
+        }
+        playerMemberContainer.style.visibility = 'visible';
+      }
+    }
+    for (let i = this.playerMode; i < 3; i++) {
+      for (let j = 0; j < 6; j++) {
+        const playerMemberContainer = document.getElementById(`idc-team${i}-member-container-${j}`);
+        playerMemberContainer.style.visibility = 'hidden'
+      }
+    }
+  }
+
+  createMonsterSelector() {
+    const monsterSelection = document.createElement('div');
+    monsterSelection.appendChild(document.createTextNode('Monster: '));
+    const monsterSelector = document.createElement('input'); // TODO: Make this input better.
+    monsterSelector.id = 'idc-selector-monster';
+    monsterSelector.onblur = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} id to ${e.target.value}`);
+      this.monsters[this.monsterEditingIndex].setId(e.target.value);
+      this.reloadTeamIcons();
+      this.reloadMonsterEditor();
+    }
+    monsterSelection.appendChild(monsterSelector);
+    return monsterSelection;
+  }
+
+  createInheritSelector() {
+    const inheritSelection = document.createElement('div');
+    inheritSelection.appendChild(document.createTextNode('Inherit: '));
+    const inheritSelector = document.createElement('input');
+    inheritSelector.onblur = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} inherit id to ${e.target.value}`);
+      this.monsters[this.monsterEditingIndex].inheritId = Number(e.target.value);
+      this.reloadTeamIcons();
+      this.reloadMonsterEditor();
+    }
+    inheritSelector.id = 'idc-selector-inherit';
+    inheritSelection.appendChild(inheritSelector);
+    return inheritSelection;
+  }
+
+  createLevelEditor() {
+    const levelEditor = document.createElement('div');
+    levelEditor.appendChild(document.createTextNode('Level: '));
+    const monsterLevelEditor = document.createElement('input');
+    monsterLevelEditor.id = 'idc-level-monster';
+    monsterLevelEditor.type = 'number';
+    monsterLevelEditor.style.width = '60px';
+    monsterLevelEditor.style.marginRight = '10px';
+    monsterLevelEditor.onblur = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} level to ${e.target.value}`);
+      this.monsters[this.monsterEditingIndex].setLevel(Number(e.target.value));
+    }
+    levelEditor.appendChild(monsterLevelEditor);
+
+    levelEditor.appendChild(document.createTextNode('Inherit Level: '));
+    const inheritLevelEditor = document.createElement('input');
+    inheritLevelEditor.id = 'idc-level-inherit';
+    inheritLevelEditor.type = 'number';
+    inheritLevelEditor.style.width = '60px';
+    inheritLevelEditor.style.marginRight = '10px';
+    inheritLevelEditor.onblur = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} inherit level to ${e.target.value}`);
+      this.monsters[this.monsterEditingIndex].inheritLevel = Number(e.target.value);
+    }
+    levelEditor.appendChild(inheritLevelEditor);
+
+    return levelEditor;
+  }
+
+  createPlusEditor() {
+    const plusEditor = document.createElement('div');
+    const maxPlusButton = document.createElement('button');
+    maxPlusButton.id = 'idc-297-plus-monster';
+    maxPlusButton.type = 'button';
+    maxPlusButton.innerText = '+297';
+    maxPlusButton.onclick = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} plusses to 297`);
+      this.monsters[this.monsterEditingIndex].setHpPlus(99);
+      this.monsters[this.monsterEditingIndex].setAtkPlus(99);
+      this.monsters[this.monsterEditingIndex].setRcvPlus(99);
+    }
+    plusEditor.appendChild(maxPlusButton);
+
+    const minPlusButton = document.createElement('button');
+    minPlusButton.id = 'idc-0-plus-monster';
+    minPlusButton.type = 'button';
+    minPlusButton.innerText = '+0';
+    minPlusButton.onclick = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} plusses to 0`);
+      this.monsters[this.monsterEditingIndex].setHpPlus(0);
+      this.monsters[this.monsterEditingIndex].setAtkPlus(0);
+      this.monsters[this.monsterEditingIndex].setRcvPlus(0);
+    }
+    plusEditor.appendChild(minPlusButton);
+
+    plusEditor.appendChild(document.createElement('br'));
+
+    const hpPlusSetting = document.createElement('input');
+    hpPlusSetting.id = 'idc-hp-plus-monster';
+    hpPlusSetting.type = 'number';
+    hpPlusSetting.style.width = '50px';
+    hpPlusSetting.style.marginRight = '10px';
+    hpPlusSetting.onclick = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} hp plusses to ${e.target.value}`);
+      this.monsters[this.monsterEditingIndex].setHpPlus(e.target.value);
+    }
+    plusEditor.appendChild(document.createTextNode('HP+ '));
+    plusEditor.appendChild(hpPlusSetting);
+
+    const atkPlusSetting = document.createElement('input');
+    atkPlusSetting.id = 'idc-atk-plus-monster';
+    atkPlusSetting.type = 'number';
+    atkPlusSetting.style.width = '50px';
+    atkPlusSetting.style.marginRight = '10px';
+    atkPlusSetting.onclick = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} atk plusses to ${e.target.value}`);
+      this.monsters[this.monsterEditingIndex].setAtkPlus(e.target.value);
+    }
+    plusEditor.appendChild(document.createTextNode('ATK+ '));
+    plusEditor.appendChild(atkPlusSetting);
+
+    const rcvPlusSetting = document.createElement('input');
+    rcvPlusSetting.id = 'idc-rcv-plus-monster';
+    rcvPlusSetting.type = 'number';
+    rcvPlusSetting.style.width = '50px';
+    rcvPlusSetting.style.marginRight = '10px';
+    rcvPlusSetting.onclick = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} rcv plusses to ${e.target.value}`);
+      this.monsters[this.monsterEditingIndex].setRcvPlus(e.target.value);
+    }
+    plusEditor.appendChild(document.createTextNode('RCV+ '));
+    plusEditor.appendChild(rcvPlusSetting);
+
+    plusEditor.appendChild(document.createElement('br'));
+
+    const inheritPlussedCheckbox = document.createElement('input');
+    inheritPlussedCheckbox.id = 'idc-plus-inherit';
+    inheritPlussedCheckbox.type = 'checkbox';
+    inheritPlussedCheckbox.onclick = (e) => {
+      console.log(`Changing monster ${this.monsterEditingIndex} inherits plussed status to ${e.target.checked}`);
+      this.monsters[this.monsterEditingIndex].inheritPlussed = e.target.checked;
+    }
+
+    plusEditor.appendChild(document.createTextNode('Inherit Plussed: '))
+    plusEditor.appendChild(inheritPlussedCheckbox);
+
+    return plusEditor;
+  }
+
+  createAwakeningEditor() {
+    const awakeningEditor = document.createElement('div');
+    const awakeningSelector = document.createElement('div');
+    awakeningSelector.appendChild(document.createTextNode('Awakenings:'));
+    awakeningSelector.appendChild(document.createElement('br'));
+    for (let i = 0; i < 9; i++) {
+      const singleAwakeningSelector = document.createElement('a');
+      singleAwakeningSelector.id = `idc-awakening-count-${i + 1}`;
+      singleAwakeningSelector.style.display = 'none';
+      singleAwakeningSelector.style.width = `${36 * AWAKENING_SCALE}px`;
+      singleAwakeningSelector.style.height = `${36 * AWAKENING_SCALE}px`;
+      singleAwakeningSelector.style.backgroundSize = `${400 * AWAKENING_SCALE}px ${580 * AWAKENING_SCALE}px`;
+      singleAwakeningSelector.style.backgroundImage = 'url(https://s3.amazonaws.com/ilmina/custom/eggs.png)';
+      singleAwakeningSelector.style.backgroundRepeat = 'no-repeat';
+      // Position should be remapped whenever the monster changes.
+      singleAwakeningSelector.style.backgroundPosition = `0px ${-324 * AWAKENING_SCALE}px`;
+      singleAwakeningSelector.onclick = () => {
+        console.log(`Awakening ${i + 1} clicked`);
+        this.monsters[this.monsterEditingIndex].awakenings = i + 1;
+        this.reloadAwakeningEditor();
+      };
+      awakeningSelector.appendChild(singleAwakeningSelector);
+    }
+
+    awakeningEditor.appendChild(awakeningSelector);
+
+    const superAwakeningSelector = document.createElement('div');
+    superAwakeningSelector.appendChild(document.createTextNode('Super Awakening:'));
+    superAwakeningSelector.appendChild(document.createElement('br'));
+
+    for (let i = 0; i < 9; i++) {
+      const saSelector = document.createElement('a');
+      saSelector.id = `idc-super-awakening-${i + 1}`;
+      saSelector.style.display = 'inline-block';
+      saSelector.style.width = `${36 * AWAKENING_SCALE}px`;
+      saSelector.style.height = `${36 * AWAKENING_SCALE}px`;
+      saSelector.style.backgroundSize = `${400 * AWAKENING_SCALE}px ${580 * AWAKENING_SCALE}px`;
+      saSelector.style.backgroundImage = 'url(https://s3.amazonaws.com/ilmina/custom/eggs.png)';
+      saSelector.style.backgroundRepeat = 'no-repeat';
+      // Position should be remapped whenever the monster changes.
+      saSelector.style.backgroundPosition = `0px ${-324 * AWAKENING_SCALE}px`;
+      saSelector.onclick = () => {
+        console.log(`Awakening ${i} clicked`);
+        this.monsters[this.monsterEditingIndex].superAwakeningIdx = i - 1;
+        this.reloadAwakeningEditor();
+      };
+      superAwakeningSelector.appendChild(saSelector);
+    }
+
+    awakeningEditor.appendChild(superAwakeningSelector);
+
+    const latentAwakeningEditor = document.createElement('div');
+    latentAwakeningEditor.appendChild(document.createTextNode('Latents: '));
+
+    for (let i = 0; i < 6; i++) {
+      const currentLatentSelector = document.createElement('a');
+      currentLatentSelector.id = `idc-selected-latent-awakening-${i}`;
+      currentLatentSelector.style.display = 'none';
+      // Width should be changed.
+      currentLatentSelector.style.width = `${36 * AWAKENING_SCALE}px`;
+      currentLatentSelector.style.height = `${36 * AWAKENING_SCALE}px`;
+      currentLatentSelector.style.backgroundSize = `${400 * AWAKENING_SCALE}px ${580 * AWAKENING_SCALE}px`;
+      currentLatentSelector.style.backgroundImage = 'url(https://s3.amazonaws.com/ilmina/custom/eggs.png)';
+      currentLatentSelector.style.backgroundRepeat = 'no-repeat';
+      // Position should be remapped whenever the monster changes.
+      currentLatentSelector.style.backgroundPosition = '0px 0px';
+      currentLatentSelector.onclick = () => {
+        console.log(`Latent Awakening ${i} clicked, should be removed.`);
+        this.monsters[this.monsterEditingIndex].removeLatent(i);
+        this.reloadAwakeningEditor();
+      };
+      latentAwakeningEditor.appendChild(currentLatentSelector);
+    }
+
+    latentAwakeningEditor.appendChild(document.createElement('br'));
+
+    const PER_ROW = 11;
+    // const scale = 0.66;
+    let totalCurrentWidth = 0;
+    let j = 1;
+    let x = 0;
+    for (let i = 0; i < 33; i++) {
+      const isSuper = i >= PER_ROW;
+      totalCurrentWidth += isSuper ? 2 : 1;
+      x++;
+      if (totalCurrentWidth > PER_ROW) {
+        latentAwakeningEditor.appendChild(document.createElement('br'));
+        totalCurrentWidth = isSuper ? 2 : 1;
+        x = 0;
+        j++;
+      }
+      const latentSelector = document.createElement('a');
+      latentSelector.id = `idc-latent-awakening-${i + 1}`;
+      latentSelector.style.display = 'inline-block';
+      latentSelector.style.width = isSuper ? `${76 * AWAKENING_SCALE}px` : `${36 * AWAKENING_SCALE}px`;
+      latentSelector.style.height = `${36 * AWAKENING_SCALE}px`;
+      latentSelector.style.backgroundSize = `${400 * AWAKENING_SCALE}px ${580 * AWAKENING_SCALE}px`
+      latentSelector.style.backgroundImage = 'url(https://s3.amazonaws.com/ilmina/custom/eggs.png)';
+      latentSelector.style.backgroundRepeat = 'no-repeat';
+      // Position should be remapped whenever the monster changes.
+      const offsetX = (j > 1 ? (80 * x + 2) : 36 * x - 36) * AWAKENING_SCALE;
+      latentSelector.style.backgroundPosition = `-${offsetX}px -${36 * j * AWAKENING_SCALE}px`;
+      latentSelector.onclick = () => {
+        console.log(`Latent Awakening ${i} clicked, should be added.`);
+        this.monsters[this.monsterEditingIndex].addLatent(i);
+        this.reloadAwakeningEditor();
+      };
+      latentAwakeningEditor.appendChild(latentSelector);
+    }
+
+    awakeningEditor.appendChild(latentAwakeningEditor);
+
+    return awakeningEditor;
+  }
+
+  createMonsterEditor() {
+    /**
+     Monster: [Search Box]
+     Inherit: [Search Box]
+     Level: [1-110] Inherit Level: [1-110]
+     [+297]  [+0]
+     HP+ [0-99] ATK+ [0-99] RCV+ [0-99]
+     Inherit +297d: [x]
+     Awakenings
+     [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]
+     Super Awakening
+     [x] [ ] [ ]
+     Latents: [ ] [ ] [ ] [ ] [ ] [ ]
+    */
+    const monsterEditor = document.createElement('div');
+
+    monsterEditor.appendChild(this.createMonsterSelector());
+    monsterEditor.appendChild(this.createInheritSelector());
+    monsterEditor.appendChild(this.createLevelEditor());
+    monsterEditor.appendChild(this.createPlusEditor());
+    monsterEditor.appendChild(this.createAwakeningEditor());
+
+    return monsterEditor;
+  }
+
+  createForm() {
+    // Remove the form if it doesn't already exist.
+    const existingForm = document.getElementById(Id.CONTAINER);
+    if (existingForm) {
+      existingForm.parentElement.removeChild(existingForm);
+    }
+
+    const form = document.createElement('div');
+    form.id = Id.CONTAINER
+
+    const layout = document.createElement('table');
+    const layoutTopRow = document.createElement('tr');
+    const layoutLeft = document.createElement('td');
+    const layoutRight = document.createElement('td');
+    layoutTopRow.appendChild(layoutLeft);
+    layoutTopRow.appendChild(layoutRight);
+    layout.appendChild(layoutTopRow);
+
+    const debugButton = document.createElement('button');
+    debugButton.innerText = 'DEBUG';
+    debugButton.onclick = () => {
+      const monster = this.monsters[this.monsterEditingIndex];
+      console.log(`HP   solo: ${monster.getHp(false)}`);
+      console.log(`HP  multi: ${monster.getHp(true)}`);
+      console.log(`ATK  solo: ${monster.getAtk(false)}`);
+      console.log(`ATK multi: ${monster.getAtk(true)}`);
+      console.log(`RCV  solo: ${monster.getRcv(false)}`);
+      console.log(`RCV multi: ${monster.getRcv(true)}`);
+    }
+
+    form.appendChild(debugButton);
+
+    layoutLeft.appendChild(this.createMonsterEditor());
+    layoutRight.appendChild(this.createTeamsForm());
+    // form.appendChild(this.createTeamsForm());
+    // form.appendChild(this.createMonsterEditor());
+
+    form.appendChild(layout);
+
+    document.body.appendChild(form);
+  }
+
+  addCombo(combo) {
+    
+  }
+
+  removeCombo(idx) {
+    if (idx < 0 || idx >= this.combos.length) {
+      throw `Cannot remove idx ${idx} from combos with length ${this.combos.length}`;
+    }
+    this.combos = [...this.combos.slice(0, idx), ...this.combos.slice(idx + 1, this.combos.length)];
+  }
+
+  // For no-skyfall leads, calculate remaining orbs on board.
+  getRemainingOrbs() {
+    return this.combos.reduce(
+        (total, combo) => total - combo.count, this.boardWidth * (this.boardWidth - 1));
+  }
+}
+
+function testIdc() {
+  const idc = new Idc();
+  idc.createForm();
+}
+
+testIdc();
+}
