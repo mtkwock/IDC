@@ -41,7 +41,7 @@ const Attribute = {
 const AWAKENING_SCALE = 0.7;
 const MONSTER_AWAKENING_SCALE = 0.43;
 const AWAKENING_NUMBERS = '⓪①②③④⑤⑥⑦⑧⑨';
-const TEAM_SCALING = 0.6;
+let teamScaling = 0.6;
 
 // 11x 1-slot Latents
 // 22 2-slot
@@ -51,8 +51,8 @@ const Latent = {
   AUTOHEAL: 4,
   RESIST_FIRE: 5, RESIST_WATER: 6, RESIST_WOOD: 7,
   RESIST_LIGHT: 8, RESIST_DARK: 9,
-  ALL_STATS: 10,
-  SDR: 11,
+  SDR: 10,
+  ALL_STATS: 11,
   EVO: 12, AWOKEN: 13, ENHANCED: 14, REDEEMABLE: 15,
 
   GOD: 16, DRAGON: 17, DEVIL: 18, MACHINE: 19,
@@ -554,7 +554,7 @@ class MonsterInstance {
     return Math.round(rcv);
   }
 
-  createInheritIcon(scaling = TEAM_SCALING) {
+  createInheritIcon(scaling = teamScaling) {
     const inheritIcon = document.createElement('table');
     inheritIcon.style.height = `${51 * scaling}px`;
     const singleRow = document.createElement('tr');
@@ -609,7 +609,7 @@ class MonsterInstance {
     return inheritIcon;
   }
 
-  updateInheritIcon(monsterEl, scaling = TEAM_SCALING) {
+  updateInheritIcon(monsterEl, scaling = teamScaling) {
     const inheritEl = monsterEl.getElementsByClassName('idc-monster-icon-inherit')[0];
     const inheritIdEl = monsterEl.getElementsByClassName('idc-monster-icon-inherit-id')[0];
     const inheritLevelEl = monsterEl.getElementsByClassName('idc-monster-icon-inherit-level')[0];
@@ -656,7 +656,7 @@ class MonsterInstance {
     }
   }
 
-  createLatentsIcon(scaling = TEAM_SCALING) {
+  createLatentsIcon(scaling = teamScaling) {
     const latentsEl = document.createElement('div');
     latentsEl.style.height = `${36 * scaling * MONSTER_AWAKENING_SCALE}px`;
     // const singleRow = document.createElement('tr');
@@ -680,7 +680,7 @@ class MonsterInstance {
     return latentsEl;
   }
 
-  updateLatentsIcon(monsterEl, scaling = TEAM_SCALING) {
+  updateLatentsIcon(monsterEl, scaling = teamScaling) {
     const fullScale = scaling * MONSTER_AWAKENING_SCALE;
     for (let i = 0; i < 6; i++) {
       const latentEl = monsterEl.getElementsByClassName(`idc-monster-icon-latent-${i}`)[0];
@@ -706,7 +706,7 @@ class MonsterInstance {
     }
   }
 
-  createIcon(playerMode = 1, scaling = TEAM_SCALING) {
+  createIcon(playerMode = 1, scaling = teamScaling) {
     const card = this.id ? this.getCard() : vm.model.cards[4014];
     const descriptionMonster = CardAssets.getIconImageData(card);
     const monsterEl = document.createElement('a');
@@ -776,7 +776,7 @@ class MonsterInstance {
           const levelEl = document.createElement('div');
           levelEl.className = 'idc-monster-icon-level';
           levelEl.setAttribute('style',
-              `display: inline-block; position: relative; font-size: ${13 * scaling}; font-weight: 600;  `+
+              `display: inline-block; position: relative; font-size: ${13 * scaling}; font-weight: ${800 * scaling}; `+
               'text-shadow: -1px 0 #000, 0 1px #000, 1px 0 #000, 0 -1px #000;')
           cell.appendChild(levelEl);
         } else if (rowIdx == 2 && colIdx == 1) {
@@ -785,7 +785,7 @@ class MonsterInstance {
           idEl.className = 'idc-monster-icon-id';
           idEl.setAttribute('style',
               'display: inline-block; color: cyan; position: relative; ' +
-              `font-size: ${13 * scaling}; font-weight: 400; text-align: right; ` +
+              `font-size: ${13 * scaling}; font-weight: ${530 * scaling}; text-align: right; ` +
               'text-shadow: -1px 0 #000, 0 1px #000, 1px 0 #000, 0 -1px #000;');
           cell.appendChild(idEl);
         }
@@ -800,7 +800,7 @@ class MonsterInstance {
     return monsterEl;
   }
 
-  updateIcon(monsterEl, playerMode = 1, scaling = TEAM_SCALING) {
+  updateIcon(monsterEl, playerMode = 1, scaling = teamScaling) {
     const card = this.id ? this.getCard() : vm.model.cards[4014];
 
     const fullWidth = `${102 * scaling}px`;
@@ -975,6 +975,118 @@ class Combo {
   }
 }
 
+const prioritizedMonsterSearch = Object.values(vm.model.cards).filter((card) => {
+  return Number(card.id) < 6000;
+}).sort((card1, card2) => {
+  if (card2.monsterPoints != card1.monsterPoints) {
+    return card2.monsterPoints - card1.monsterPoints;
+  }
+  return card2.id - card1.id;
+});
+const prioritizedInheritSearch = prioritizedMonsterSearch.filter((card) => {
+  // No idea why, but inheritanceType 3 and 7 are assistables.
+  // 1, 4, and 5 are unknown
+  // 0 is none
+  // 2 and 6 are unassistable.
+  return card.inheritanceType == 3 || card.inheritanceType == 7;
+}).sort((card1, card2) => {
+  if (card1.awakenings[0] != card2.awakenings[0]) {
+    if (card1.awakenings[0] == IdcAwakening.AWOKEN_ASSIST) {
+      return -1;
+    }
+    if (card2.awakenings[0] == IdcAwakening.AWOKEN_ASSIST) {
+      return 1;
+    }
+  }
+  if (card2.monsterPoints != card1.monsterPoints) {
+    return card2.monsterPoints - card1.monsterPoints;
+  }
+  return card2.id - card1.id;
+})
+
+/**
+ * Given text, finds the top maxResults monster IDs that match
+ * the text in priority order:
+ * 1) Exact ID
+ * 2) Name Contains Substring
+ * 3) Fuzzily matches (All letters are present in order in name) 
+ * @param {string} text
+ * @param {number=} maxResults
+ * @returns {!Array<number>}
+ */
+function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined) {
+  searchArray = searchArray || prioritizedMonsterSearch;
+  text = text.toLowerCase();
+  const result = [];
+  // Test for exact match.
+  if (text in vm.model.cards) {
+    result.push(text);
+  }
+  const attributes = {
+    'r': 0, 'b': 1, 'g': 2, 'l': 3, 'd': 4, 'x': -1,
+  };
+  let attribute = -1;
+  let subattribute = -2;
+  let attributeText = '';
+  let subattributeText = '';
+  if (text.length > 2 && text[0] in attributes) {
+    attribute = attributes[text[0]];
+    attributeText = text.substring(1).trimLeft();
+    if (attributeText.length > 2 && attributeText[0] in attributes) {
+      subattribute = attributes[attributeText[0]];
+      subattributeText = attributeText.substring(1).trimLeft();
+    }
+  }
+  // Search for monsters whose substrings work.
+  for (const card of searchArray) {
+    if (result.length >= maxResults) {
+      break;
+    }
+    if (card.name.toLowerCase().indexOf(text) >= 0)  {
+      result.push(card.id);
+    }
+  }
+  if (attributeText && result.length < maxResults) {
+    for (const card of searchArray.filter((card) => card.attribute == attribute)) {
+      key = card.id;
+      if (result.includes(key)) {
+        continue;
+      }
+      if (card.name.toLowerCase().includes(attributeText)) {
+        result.push(key);
+      }
+      if (subattributeText &&
+          result.length < maxResults &&
+          card.subattribute == subattribute &&
+          card.name.toLowerCase().includes(subattributeText)) {
+        result.push(key);
+      }
+    }
+  }
+  for (const card of searchArray) {
+    if (result.length >= maxResults) {
+      break;
+    }
+    if (result.includes(card.id)) {
+      continue;
+    }
+    const name = card.name.toLowerCase();
+    // Fuzzy match with the name.
+    let currentStringIdx = -1;
+    for (const c of text) {
+      currentStringIdx = name.indexOf(c, currentStringIdx + 1);
+      if (currentStringIdx < 0) {
+        break;
+      }
+    }
+    if (currentStringIdx >= 0) {
+      result.push(card.id);
+      continue;
+    }
+  }
+  return result;
+}
+
 
 class Idc {
   constructor() {
@@ -1025,6 +1137,10 @@ class Idc {
     this.monsterEditingIndex = 0;
 
     this.teamForm = null;
+
+    this.title = '';
+
+    this.description = '';
   }
 
   setPlayerMode(newMode) {
@@ -1215,11 +1331,38 @@ class Idc {
   }
 
   reloadMonsterEditor() {
-    console.warn('Not implemented!');
     // Reload Monster IDs
-    // Reload levels
-    // Reload Plusses
-    // Reload Awakenings
+    const monsterSelector = document.getElementById('idc-selector-monster');
+    const levelSelector = document.getElementById('idc-level-monster');
+    const hpPlusSetting = document.getElementById('idc-hp-plus-monster');
+    const atkPlusSetting = document.getElementById('idc-atk-plus-monster');
+    const rcvPlusSetting = document.getElementById('idc-rcv-plus-monster');
+    const activeMonster = this.monsters[this.monsterEditingIndex];
+    if (activeMonster.id != null) {
+      monsterSelector.value = activeMonster.getCard().name;
+      levelSelector.value = activeMonster.level;
+      hpPlusSetting.value = activeMonster.hpPlus;
+      atkPlusSetting.value = activeMonster.atkPlus;
+      rcvPlusSetting.value = activeMonster.rcvPlus;
+    } else {
+      monsterSelector.value = '';
+      levelSelector.value = 1;
+      hpPlusSetting.value = activeMonster.hpPlus;
+      atkPlusSetting.value = activeMonster.atkPlus;
+      rcvPlusSetting.value = activeMonster.rcvPlus;
+    }
+    const inheritSelector = document.getElementById('idc-selector-inherit');
+    const inheritLevelSelector = document.getElementById('idc-level-inherit');
+    const inheritPlussedCheckbox = document.getElementById('idc-plus-inherit');
+    if (activeMonster.inheritId > 0) {
+      inheritSelector.value = activeMonster.getInheritCard().name;
+      inheritLevelSelector.value = activeMonster.inheritLevel;
+      inheritPlussedCheckbox.checked = activeMonster.inheritPlussed;
+    } else {
+      inheritSelector.value = '';
+      inheritLevelSelector.value = 1;
+      inheritPlussedCheckbox.checked = false;
+    }
     this.reloadAwakeningEditor();
   }
 
@@ -1264,31 +1407,132 @@ class Idc {
   }
 
   createMonsterSelector() {
+    const maxResults = 15;
     const monsterSelection = document.createElement('div');
-    monsterSelection.appendChild(document.createTextNode('Monster: '));
     const monsterSelector = document.createElement('input'); // TODO: Make this input better.
+    monsterSelector.style.width = '100%';
+    monsterSelector.placeholder = 'Monster Search';
+    const options = document.createElement('div');
+    options.display = 'none';
+    for (let i = 0; i < maxResults; i++) {
+      const option = document.createElement('div');
+      option.id = `idc-monster-select-option-${i}`;
+      option.value = '0';
+      option.style.display = 'none';
+      options.style.fontSize = 'x-small';
+      option.onmouseover = () => {
+        option.style.border = '1px solid white';
+      }
+      option.onmouseleave = () => {
+        option.style.border = '';
+      }
+      option.onclick = () => {
+        options.style.display = 'none';
+        monsterSelector.value = option.value;
+        this.monsters[this.monsterEditingIndex].setId(monsterSelector.value);
+        this.reloadTeamIcons();
+        this.reloadMonsterEditor();        
+      }
+      options.appendChild(option);
+    }
     monsterSelector.id = 'idc-selector-monster';
-    monsterSelector.onblur = (e) => {
-      console.log(`Changing monster ${this.monsterEditingIndex} id to ${e.target.value}`);
-      this.monsters[this.monsterEditingIndex].setId(e.target.value);
-      this.reloadTeamIcons();
-      this.reloadMonsterEditor();
+    monsterSelector.onkeyup = (e) => {
+      if (e.keyCode == 13) {
+        const value = document.getElementById(`idc-monster-select-option-0`).value;
+        console.log(`Changing monster ${this.monsterEditingIndex} id to ${value}`);
+        this.monsters[this.monsterEditingIndex].setId(value);
+        this.reloadTeamIcons();
+        this.reloadMonsterEditor();
+        options.style.display = 'none';
+        return;
+      }
+      const currentText = e.target.value.toLowerCase();
+      if (currentText == '') {
+        options.style.display = 'none';
+        return;
+      }
+      options.style.display = 'block';
+      const fuzzyMatches = fuzzyMonsterSearch(currentText, maxResults);
+      for (let i = 0; i < fuzzyMatches.length && i < maxResults; i++) {
+        const option = document.getElementById(`idc-monster-select-option-${i}`);
+        const key = fuzzyMatches[i];
+        option.innerText = `${key} - ${vm.model.cards[key].name}`;
+        option.value = key;
+        option.style.display = 'block';
+      }
+      for (let i = fuzzyMatches.length; i < maxResults; i++) {
+        const option = document.getElementById(`idc-monster-select-option-${i}`);
+        option.style.display = 'none';
+      }
     }
     monsterSelection.appendChild(monsterSelector);
+    monsterSelection.appendChild(document.createElement('br'));
+    monsterSelection.appendChild(options);
     return monsterSelection;
   }
 
   createInheritSelector() {
+    const maxResults = 15;
     const inheritSelection = document.createElement('div');
-    inheritSelection.appendChild(document.createTextNode('Inherit: '));
+    // inheritSelection.appendChild(document.createTextNode('Inherit: '));
     const inheritSelector = document.createElement('input');
-    inheritSelector.onblur = (e) => {
-      this.monsters[this.monsterEditingIndex].inheritId = Number(e.target.value);
-      this.reloadTeamIcons();
-      this.reloadMonsterEditor();
+    inheritSelector.style.width = '100%';
+    inheritSelector.placeholder = 'Inherit Search';
+    const options = document.createElement('div');
+    options.display = 'none';
+    for (let i = 0; i < maxResults; i++) {
+      const option = document.createElement('div');
+      option.id = `idc-inherit-select-option-${i}`;
+      option.value = '0';
+      option.style.display = 'none';
+      options.style.fontSize = 'x-small';
+      option.onmouseover = () => {
+        option.style.border = '1px solid white';
+      }
+      option.onmouseleave = () => {
+        option.style.border = '';
+      }
+      option.onclick = () => {
+        options.style.display = 'none';
+        inheritSelector.value = option.value;
+        this.monsters[this.monsterEditingIndex].inheritId = inheritSelector.value;
+        this.reloadTeamIcons();
+        this.reloadMonsterEditor();        
+      }
+      options.appendChild(option);
+    }
+    inheritSelector.onkeyup = (e) => {
+      if (e.keyCode == 13) {
+        const value = document.getElementById(`idc-inherit-select-option-0`).value;
+        console.log(`Changing monster inherit ${this.monsterEditingIndex} id to ${value}`);
+        this.monsters[this.monsterEditingIndex].inheritId = value;
+        this.reloadTeamIcons();
+        this.reloadMonsterEditor();
+        options.style.display = 'none';
+        return;
+      }
+      const currentText = e.target.value.toLowerCase();
+      if (currentText == '') {
+        options.style.display = 'none';
+        return;
+      }
+      options.style.display = 'block';
+      const fuzzyMatches = fuzzyMonsterSearch(currentText, maxResults, prioritizedInheritSearch);
+      for (let i = 0; i < fuzzyMatches.length && i < maxResults; i++) {
+        const option = document.getElementById(`idc-inherit-select-option-${i}`);
+        const key = fuzzyMatches[i];
+        option.innerText = `${key} - ${vm.model.cards[key].name}`;
+        option.value = key;
+        option.style.display = 'block';
+      }
+      for (let i = fuzzyMatches.length; i < maxResults; i++) {
+        const option = document.getElementById(`idc-inherit-select-option-${i}`);
+        option.style.display = 'none';
+      }
     }
     inheritSelector.id = 'idc-selector-inherit';
     inheritSelection.appendChild(inheritSelector);
+    inheritSelection.appendChild(options);
     return inheritSelection;
   }
 
@@ -1478,7 +1722,6 @@ class Idc {
     latentAwakeningEditor.appendChild(document.createElement('br'));
 
     const PER_ROW = 11;
-    // const scale = 0.66;
     let totalCurrentWidth = 0;
     let j = 1;
     let x = 0;
@@ -1518,18 +1761,18 @@ class Idc {
 
   createMonsterEditor() {
     /**
-     Monster: [Search Box]
-     Inherit: [Search Box]
-     Level: [1-110] Inherit Level: [1-110]
-     [+297]  [+0]
-     HP+ [0-99] ATK+ [0-99] RCV+ [0-99]
-     Inherit +297d: [x]
-     Awakenings
-     [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]
-     Super Awakening
-     [x] [ ] [ ]
-     Latents: [ ] [ ] [ ] [ ] [ ] [ ]
-    */
+     * Monster: [Search Box]
+     * Inherit: [Search Box]
+     * Level: [1-110] Inherit Level: [1-110]
+     * [+297]  [+0]
+     * HP+ [0-99] ATK+ [0-99] RCV+ [0-99]
+     * Inherit +297d: [x]
+     * Awakenings
+     * [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]
+     * Super Awakening
+     * [x] [ ] [ ]
+     * Latents: [ ] [ ] [ ] [ ] [ ] [ ]
+     */
     const monsterEditor = document.createElement('div');
 
     monsterEditor.appendChild(this.createMonsterSelector());
@@ -1552,8 +1795,10 @@ class Idc {
     form.id = Id.CONTAINER
 
     const layout = document.createElement('table');
+    layout.style.fontSize = 'small';
     const layoutTopRow = document.createElement('tr');
     const layoutLeft = document.createElement('td');
+    layoutLeft.style.paddingRight = '10px';
     const layoutRight = document.createElement('td');
     layoutRight.style.verticalAlign = 'top';
     layoutTopRow.appendChild(layoutLeft);
@@ -1574,7 +1819,7 @@ class Idc {
 
     form.appendChild(debugButton);
 
-    layoutLeft.appendChild(this.createMonsterEditor());
+    // Player Mode controller.
     const playerModeRadio = document.createElement('div');
     for (let i = 0; i < 3; i++) {
       const modeInput = document.createElement('input');
@@ -1596,8 +1841,35 @@ class Idc {
       modeLabel.innerText = `${i + 1}P`;
       playerModeRadio.appendChild(modeLabel)
     }
-    layoutRight.appendChild(playerModeRadio);
+    layoutLeft.appendChild(playerModeRadio);
+    layoutLeft.appendChild(this.createMonsterEditor());
+    // TODO: update (latent) elements so that when updated, their heights also change.
+    // const zoomEl = document.createElement('input');
+    // zoomEl.type = 'number';
+    // zoomEl.value = 60;
+    // zoomEl.width = '24px';
+    // zoomEl.onblur = () => {
+    //   teamScaling = Number(zoomEl.value) / 100;
+    //   this.reloadTeamIcons();
+    // }
+    // layoutRight.appendChild(zoomEl);
+    const titleElement = document.createElement('input');
+    titleElement.value = 'Team Name';
+    titleElement.setAttribute('style',
+        'background-color: black; border: none; color: white; width: 100%; font-size: medium;');
+    titleElement.onkeyup = () => {
+      this.title = titleElement.value;
+    };
+    layoutRight.appendChild(titleElement);
     layoutRight.appendChild(this.createTeamsForm());
+    const descriptionElement = document.createElement('textarea');
+    descriptionElement.setAttribute('style',
+        'background-color: black; border: none; color: white; width: 100%;');
+    descriptionElement.value = 'Team Description';
+    descriptionElement.onkeyup = () => {
+      this.description = descriptionElement.value;
+    };
+    layoutRight.appendChild(descriptionElement);
 
     form.appendChild(layout);
 
@@ -1625,6 +1897,10 @@ class Idc {
 }
 
 function testIdc() {
+  // Clear Ilmina.
+  for (const element of document.getElementsByClassName('main-site-div')) {
+    element.parentElement.removeChild(element);
+  }
   const idc = new Idc();
   idc.createForm();
 }
