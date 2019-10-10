@@ -1162,6 +1162,7 @@ class StoredTeams {
     const saveEl = document.createElement('div');
     saveEl.id = 'idc-save-team';
     saveEl.innerText = 'Save Team';
+    saveEl.style.fontSize = 'large';
     saveEl.onmouseover = () => saveEl.style.border = '1px solid white';
     saveEl.onmouseleave = () => saveEl.style.border = '';
 
@@ -1174,7 +1175,7 @@ class StoredTeams {
       const teamEl = document.createElement('div');
       const loadEl = document.createElement('div');
       loadEl.innerText = teamName;
-      loadEl.style.width = '80%';
+      loadEl.style.width = '95%';
       loadEl.style.display = 'inline-block';
       loadEl.onmouseover = () => loadEl.style.border = '1px solid white';
       loadEl.onmouseleave = () => loadEl.style.border = '';
@@ -1268,7 +1269,7 @@ class Idc {
   fromJson(json) {
     this.playerMode = json.playerMode;
     this.title = json.title;
-    this.description = this.description;
+    this.description = json.description;
     this.monsters = json.monsters.map((monsterJson) => MonsterInstance.fromJson(monsterJson));
   }
 
@@ -1287,6 +1288,7 @@ class Idc {
     document.getElementById('idc-team-description').value = this.description;
     this.reloadTeamIcons();
     this.reloadMonsterEditor();
+    document.getElementById(`idc-team-mode-select${this.playerMode}`).checked = true;
   }
 
   viewTeams() {
@@ -1928,11 +1930,6 @@ class Idc {
     monsterEditor.appendChild(this.createAwakeningEditor());
 
     return monsterEditor;
-  }
-
-  createSaveLoad() {
-    const saveLoadContainer = document.createElement('div');
-
   }
 
   createForm() {
