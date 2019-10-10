@@ -1049,6 +1049,57 @@ let UserSettings = {
   indexing: 0,
 }
 
+/**
+ * Command Editor syntax
+ * Start with:
+ *   1) XLBC - A shape to choose the colors in.
+ *             Cross, L, Box, and Column
+ *   2) R    - A row.  Can add any valid number of orbs after such as
+ *             R10, R11, R15. Defaults to 6
+ *   3) ##   - Size of this Orb match. Must be between 3 and board size inclusive.
+ *   4)      - Going straight to the attributes will assume a 3-match.
+ * Choose attributes
+ *   Must be at least one from "rgbldhpmjo?", doing multiple will cause
+ *   multiple of these to occur.
+ *   e.g. 4rr will make 2x Red TPAs.
+ *   Red, Blue, Green, Light, Dark, Heart, Poison, Mortal poison, Jammer, bOmb, uncolored.
+ * Add Enhance
+ *   e#      - This will cause # orbs to be enhanced.
+
+ * Some examples:
+ *  r        - Make a 3-match of reds.
+ *  rrrr     - Make 4x 3-match of reds.
+ *  4hle1    - Make a TPA of each heal and light with 1 enhanced orb.
+ *  Rd       - Make a Row of 6 (on 6x5) dark orbs.
+ *  R9rb     - Make a Row with 9 orbs of each red and blue.
+ *  Bhg ggh  - Make a Box of hearts and greens, then two green 3-matches and one heart 3-match.
+ *  Che1     - Make a Column of hearts with 1 enhanced orb.
+ *  R30d     - Make a Board of 30 darks (Also has a row).
+
+ * Deleting combos
+ * Start with:
+ *   1) DA  - Delete ALL combos of the given attribute(s).
+ *   2) Da  - Same as above.
+ *   3) D   - Delete combos of a given attribute and a give position.
+ * Follow up with attributes to delete.
+ *   1) Must be at least one from "rgbldhpmjo?", doing multiple will cause
+ *   multiple deletions to occur.
+ *   2) If using DA/Da, you can use DAa/Daa to delete ALL combos that you've made.
+ * Add an optional index to delete.
+ *   1) #  - Will delete the #th combo, 0 or 1 indexed depending on settings.
+ *   2) -# - Will delete the #th combo from the end.
+ *   3) _  - No input will default to deleting the last combo.
+
+ * Some Examples
+ *  Dr     - Delete the last Red combo
+ *  Dab    - Delete All Blue combos.
+ *  Dald   - Delete All Light and Dark combos.
+ *  D?0    - Delete the first Uncolored Combo. (Invalid if Indexed 1)
+ *  Dj1    - Delete the second Jammer combo. (First if Indexed 1)
+ *  Dg-2   - Delete the 2nd from last Green combo.
+ *  Drb2   - Delete, from reds and blues, the 3nd combo (2nd if Indexed 1)
+ */
+
 class ComboContainer {
   constructor() {
     this.combos = {};
