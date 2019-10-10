@@ -162,17 +162,6 @@ const AWAKENING_BONUS = new Map([
 
 ]);
 
-const Shape = {
-  AMORPHOUS: 0,
-  L: 1,
-  COLUMN_4: 2,
-  COLUMN_5: 3,
-  COLUMN_6: 4,
-  CROSS: 5,
-  SQUARE: 6,
-  ROW: 7,
-};
-
 // TODO: Put all ids as constants in here so that I can access them reliably.
 const Id = {
   CONTAINER: 'idc-container',
@@ -795,15 +784,17 @@ class MonsterInstance {
               `display: inline-block; position: relative; font-size: ${13 * scaling}; font-weight: ${800 * scaling}; `+
               'text-shadow: -1px 0 #000, 0 1px #000, 1px 0 #000, 0 -1px #000;')
           cell.appendChild(levelEl);
+          cell.style.verticalAlign = 'bottom';
         } else if (rowIdx == 2 && colIdx == 1) {
           // ID
           const idEl = document.createElement('div');
           idEl.className = 'idc-monster-icon-id';
           idEl.setAttribute('style',
-              'display: inline-block; color: cyan; position: relative; ' +
+              'display: inline-block; color: white; position: relative; ' +
               `font-size: ${13 * scaling}; font-weight: ${530 * scaling}; text-align: right; ` +
               'text-shadow: -1px 0 #000, 0 1px #000, 1px 0 #000, 0 -1px #000;');
           cell.appendChild(idEl);
+          cell.style.verticalAlign = 'bottom';
         }
         row.appendChild(cell);
       }
@@ -963,6 +954,46 @@ function getAwakeningOffsets(awakeningNumber) {
   return result;
 }
 
+const Shape = {
+  AMORPHOUS: 0,
+  L: 1,
+  COLUMN: 2,
+  CROSS: 3,
+  BOX: 4,
+  ROW: 5,
+};
+
+const LetterToShape = {
+  A: Shape.AMORPHOUS,
+  L: Shape.L,
+  C: Shape.COLUMN,
+  X: Shape.CROSS,
+  B: Shape.BOX,
+  R: Shape.ROW,
+}
+
+const ShapeToLetter = {
+  0: 'A',
+  1: 'L',
+  2: 'C',
+  3: 'X',
+  4: 'B',
+  5: 'R',
+};
+
+const LetterToAttributeName = {
+  'r': 'Fire',
+  'b': 'Water',
+  'g': 'Wood',
+  'l': 'Light',
+  'd': 'Dark',
+  'h': 'Heart',
+  'p': 'Poison',
+  'j': 'Jammer',
+  'm': 'Mortal Poison',
+  'o': 'Bomb',
+  '?': "None",
+};
 
 class Combo {
   constructor(count, attribute, enhanced = 0, shape = Shape.AMORPHOUS) {
@@ -977,24 +1008,16 @@ class Combo {
       console.warn(`L-shape must have 5 orbs, got ${count}`);
       shape = shape.AMORPHOUS;
     }
-    if (shape == Shape.COLUMN_4 && count != 4) {
+    if (shape == Shape.Column && (count < 4 || count > 6)) {
       console.warn(`Small column must have 4 orbs, got ${count}`);
-      shape = shape.AMORPHOUS;
-    }
-    if (shape == Shape.COLUMN_5 && count != 5) {
-      console.warn(`Column must have exactly 5 orbs, got ${count}`);
-      shape = shape.AMORPHOUS;
-    }
-    if (shape == Shape.COLUMN_6 && count != 6) {
-      console.warn(`Large column must have exactly 6 orbs, got ${count}`);
       shape = shape.AMORPHOUS;
     }
     if (shape == Shape.CROSS && count != 5) {
       console.warn(`Cross must have exactly 5 orbs, got ${count}`);
       shape = shape.AMORPHOUS;
     }
-    if (shape == Shape.SQUARE && count != 9) {
-      console.warn(`Square must have exactly 9 orbs, got ${count}`);
+    if (shape == Shape.BOX && count != 9) {
+      console.warn(`Box must have exactly 9 orbs, got ${count}`);
       shape = shape.AMORPHOUS;
     }
     if (shape == Shape.ROW && count < 5) {
@@ -1002,6 +1025,417 @@ class Combo {
       shape = shape.AMORPHOUS;
     }
     this.shape = shape;
+  }
+
+  recount() {
+    if (this.enhanced > this.count) {
+      this.enhanced = this.count;
+    }
+    if (this.shape == Shape.L || this.shape == Shape.CROSS) {
+      this.count = 5;
+    }
+    if (this.shape == Shape.BOX) {
+      this.count = 9;
+    }
+    if (this.shape == Shape.COLUMN) {
+      console.warn('TODO: Handle auto changing to column');
+    }
+  }
+}
+
+const COLORS = 'rbgldhpmjo?';
+
+let UserSettings = {
+  indexing: 0,
+}
+
+class ComboContainer {
+  constructor() {
+    this.combos = {};
+    for (const c of COLORS) {
+      this.combos[c] = [];
+    }
+    this.boardWidth = 6;
+    this.maxVisibleCombos = 14;
+  }
+
+  getBoardSize() {
+    return this.boardWidth * (this.boardWidth - 1);
+  }
+
+  createElement(idc) {
+    const el = document.createElement('div');
+    el.id = 'idc-combo-editor';
+    const inputEl = document.createElement('input');
+    inputEl.id = 'idc-combo-input';
+    inputEl.placeholder = 'Combo Editor Commands';
+    inputEl.title = 'Good luck finding out how to use this for now...';
+    inputEl.onkeyup = (e) => {
+      if (e.keyCode == 13) {
+        const res = this.doCommands(inputEl.value);;
+        inputEl.value = res.join(' ');
+      }
+    }
+    el.appendChild(inputEl);
+
+    for (const c of COLORS) {
+      const colorTable = document.createElement('table');
+      colorTable.style.fontSize = 'xx-small';
+      colorTable.id = 'idc-combo-table-' + c;
+      const colorTableHeader = document.createElement('tr');
+      const colorTableCountRow = document.createElement('tr');
+      const colorTableEnhancedRow = document.createElement('tr');
+      for (let i = -1; i < this.maxVisibleCombos; i++) {
+        const headerCell = document.createElement('th');
+        const countCell = document.createElement('td');
+        const enhancedCell = document.createElement('td');
+        if (i == -1) {
+          headerCell.innerText = c.toUpperCase();
+          countCell.innerText = '#';
+          enhancedCell.innerText = '+';
+        }
+        else {
+          headerCell.innerText = i + UserSettings.indexing;
+          const countInput = document.createElement('input');
+          countInput.onblur = () => {
+            const v = countInput.value;
+            if (!v || Number(v) == 0) {
+              if (i < this.combos[c].length) {
+                this.delete(`${c}${i + UserSettings.indexing}`);
+                this.reloadElement();
+              }
+              return;
+            }
+            if (v[0] == 'R') {
+              let count = Number(v.substring(1));
+              if (count == NaN) {
+                console.warn('Invalid row input ' + v);
+                countInput.value = '';
+                return;
+              }
+              count = count || this.boardWidth;
+              if (count < this.boardWidth || count == this.boardWidth + 1) {
+                console.warn('Invalid row input ' + v);
+                countInput.value = '';
+                return;
+              }
+              if (i < this.combos[c].length) {
+                this.combos[c][i].shape = LetterToShape['R'];
+                this.combos[c][i].count = count;
+                this.combos[c][i].recount();
+              } else {
+                this.addShape(v[0], `${v.substring(1)}${c}`);
+              }
+              this.reloadElement();
+              return;
+            }
+            if ('LCXB'.indexOf(v) >= 0) {
+              if (i < this.combos[c].length) {
+                this.combos[c][i].shape = LetterToShape[countInput];
+                this.combos[c][i].recount();
+              } else {
+                this.addShape(v, `${c}`);
+              }
+              this.reloadElement();
+              return;
+            }
+            const maybeNumber = Number(v);
+            if (maybeNumber != NaN && maybeNumber > 2 && maybeNumber <= this.getBoardSize()) {
+              if (i < this.combos[c].length) {
+                this.combos[c][i].shape = Shape.AMORPHOUS;
+                this.combos[c][i].count = maybeNumber;
+                this.combos[c][i].recount();
+              } else {
+                this.add(maybeNumber, c);
+                this.reloadElement();
+              }
+              this.reloadElement();
+              return;
+            }
+            console.log('countInput has invalid value, removing: ' + countInput.value);
+            countInput.value = '';
+            if (i < this.combos[c].length) {
+              this.delete(`${c}${i + UserSettings.indexing}`);
+              this.reloadElement();
+            }
+          };
+          countInput.id = `idc-combo-count-${c}-${i}`;
+          countInput.style.width = '20px';
+          countInput.style.height = '12px';
+          countCell.appendChild(countInput);
+          const enhancedInput = document.createElement('input');
+          enhancedInput.onblur = () => {
+            if (i >= this.combos[c].length) {
+              enhancedInput.value = 0;
+              return;
+            }
+            let num = Number(enhancedInput.value);
+            if (num == NaN) {
+              num = 0;
+            }
+            const combo = this.combos[c][i];
+            if (combo.count >= num) {
+              combo.enhanced = num;
+            } else {
+              combo.enhanced = combo.count;
+              enhancedInput.value = combo.count;
+            }
+          }
+          enhancedInput.id = `idc-combo-enhanced-${c}-${i}`;
+          enhancedInput.style.width = '20px';
+          enhancedInput.style.height = '12px';
+          enhancedCell.appendChild(enhancedInput);
+        }
+        colorTableHeader.appendChild(headerCell);
+        colorTableCountRow.appendChild(countCell);
+        colorTableEnhancedRow.appendChild(enhancedCell);
+      }
+      colorTable.appendChild(colorTableHeader);
+      colorTable.appendChild(colorTableCountRow);
+      colorTable.appendChild(colorTableEnhancedRow);
+
+      el.appendChild(colorTable);
+    }
+
+    return el;
+  }
+
+  reloadElement() {
+    for (const c in this.combos) {
+      const comboArray = this.combos[c];
+      for (let i = 0; i < this.maxVisibleCombos; i++) {
+        const countEl = document.getElementById(`idc-combo-count-${c}-${i}`);
+        const enhancedEl = document.getElementById(`idc-combo-enhanced-${c}-${i}`);
+        if (i >= comboArray.length) {
+          countEl.value = '';
+          enhancedEl.value = '';
+        } else {
+          const combo = comboArray[i];
+          if (combo.shape == Shape.ROW) {
+            countEl.value = `R${combo.count}`;
+          } else if (combo.shape == Shape.AMORPHOUS) {
+            countEl.value = Number(combo.count);
+          } else {
+            countEl.value = ShapeToLetter[combo.shape];
+          }
+          enhancedEl.value = String(combo.enhanced);
+        }
+      }
+    }
+  }
+
+  setWidth(width) {
+    if (width < 5 || width > 7) {
+      return false;
+    }
+    this.boardWidth = width;
+  }
+
+  /**
+   * Execute a user input
+   * e.g. 'rrbbgg Lr Bh'
+   */
+  doCommands(cmds) {
+    cmds = cmds.split(' ')
+        .map((c) => c.trim())
+        .filter((c) => Boolean(c));
+    let executed = 0;
+    for (const i in cmds) {
+      if (!this.doCommand(cmds[i])) {
+        break;
+      }
+      executed++;
+    }
+    const remainingCommands = cmds.slice(executed);
+    this.reloadElement();
+    return remainingCommands;
+  }
+
+  /**
+   * Execute a single command.
+   * e.g. 'rrbbgg'
+   */
+  doCommand(cmd) {
+    if (cmd.startsWith('Da') || cmd.startsWith('DA')) {
+      return this.deleteAll(cmd.substring(2));
+    }
+    if (cmd.startsWith('D')) {
+      return this.delete(cmd.substring(1));
+    }
+    if ('XCLBR'.indexOf(cmd[0]) >= 0) {
+      return this.addShape(cmd[0], cmd.substring(1));
+    }
+    if ('123456789'.indexOf(cmd[0]) >= 0) {
+      let count = cmd[0];
+      cmd = cmd.substring(1);
+      if ('0123456789'.indexOf(cmd[0]) >= 0) {
+        count += cmd[0];
+        cmd = cmd.substring(1);
+      }
+      if (!cmd) {
+        console.warn('Needs a color to Add a Number');
+        return false;
+      }
+      return this.add(Number(count), cmd);
+    }
+    if (cmd[0] in this.combos) {
+      return this.add(3, cmd);
+    }
+    console.log('Unhandled start ' + cmd[0]);
+    return false;
+  }
+
+  /**
+   * Execute Delete All (DA/Da) command.
+   */
+  deleteAll(cmd) {
+    if (cmd[0] == 'a') {
+      for (const attribute in this.combos) {
+        this.combos[attribute].length = 0;
+      }
+      return true;
+    }
+    // Assume to delete all color values present.
+    for (const c of cmd) {
+      if (!(c in this.combos)) {
+        console.warn('Not valid color: ' + c);
+      }
+      this.combos[c].length = 0;
+    }
+    return true;
+  }
+
+  delete(cmd) {
+    let colorsToDelete = [];
+    while(cmd && cmd[0] in this.combos) {
+      colorsToDelete.push(cmd[0]);
+      cmd = cmd.substring(1);
+    }
+    let idxToDelete = 1;
+    let fromEnd = true;
+    if (cmd) {
+      if (cmd[0] == '-') {
+        fromEnd = true;
+        cmd = cmd.substring(1);
+      } else {
+        fromEnd = false;
+      }
+      let num = '';
+      if ('0123456789'.indexOf(cmd) >= 0) {
+        num += cmd[0];
+        cmd = cmd.substring(1);
+        if (cmd && '0123456789'.indexOf(cmd) >= 0) {
+          num += cmd[0];
+          cmd = cmd.substring(1);
+        }
+      }
+      if (num) {
+        idxToDelete = Number(num);
+      }
+      if (cmd) {
+        console.log(`Unused delete args: ${cmd}`);
+      }
+    }
+    if (fromEnd) {
+      for (const c of colorsToDelete) {
+        const idx = this.combos[c].length - idxToDelete;
+        if (idx >= 0) {
+          this.combos[c].splice(idx, 1);
+          console.log(`Deleting from ${c}, combo #${idx}`);
+        } else {
+          console.warn(`Index out of bounds: ${idx}`);
+        }
+      }
+      return true;
+    }
+    for (const c of colorsToDelete) {
+      const idx = idxToDelete - UserSettings.indexing;
+      if (idx >= 0 && idx < this.combos[c].length) {
+        this.combos[c].splice(idx, 1);
+        console.log(`Deleting from ${c} combo #${idx}`);
+      } else {
+        console.warn(`Index out of bounds: ${idx}`);
+      }
+    }
+    return true;
+  }
+
+  addShape(shape, cmd) {
+    let times = 1;
+    let count;
+    switch (shape) {
+      case 'R': // Row
+        count = this.boardWidth;
+        let num = '';
+        if ('123456789'.indexOf(cmd[0]) >= 0) {
+          num += cmd[0];
+          cmd = cmd.substring(1);
+          if ('1234567890'.indexOf(cmd[0]) >= 0) {
+            num += cmd[0];
+            cmd = cmd.substring(1);
+          }
+        }
+        count = num ? Number(num) : this.boardWidth;
+        if (count < this.boardWidth || count == this.boardWidth + 1) {
+          console.log(`Invalid row count: ${count}`);
+          return false;
+        }
+        break;
+      case 'C': // Column
+        count = this.boardWidth - 1;
+        break;
+      case 'X': // Cross
+      case 'L': // L
+        count = 5;
+        break;
+      case 'B': // Box (VDP/SFua)
+        count = 9;
+        break;
+      default:
+        console.warn('Invalid shape: ' + shape);
+        return false;
+    }
+    
+    return this.add(count, cmd, LetterToShape[shape]);
+  }
+
+  add(count, cmd, shape = Shape.AMORPHOUS) {
+    if (count < 3 || count > this.boardWidth * (this.boardWidth - 1)) {
+      console.warn(`Count must be at least 3 and below ${this.boardWidth * (this.boardWidth - 1)}, got ${count}`)
+    }
+    const colorsToAdd = [];
+    while (cmd && cmd[0] in this.combos) {
+      colorsToAdd.push(cmd[0]);
+      cmd = cmd.substring(1);
+    }
+    let enhanced = 0;
+    if (cmd && cmd[0] == 'e') {
+      cmd = cmd.substring(1);
+      let num = '';
+      if ('12345679'.indexOf(cmd[0]) >= 0) {
+        num += cmd[0];
+        cmd = cmd.substring(1);
+        if ('12345679'.indexOf(cmd[0]) >= 0) {
+          num += cmd[0];
+          cmd = cmd.substring(1);
+        }
+      }
+      enhanced = num ? Number(num) : 1;
+    }
+    if (cmd) {
+      console.warn(`Unused substring: "${cmd}"`);
+    }
+
+    if (enhanced > count) {
+      console.warn(`Enhanced count ${enhanced} > orb count ${count}, setting enhanced count to orb count.`);
+      enhanced = count;
+    }
+
+    for (const c of colorsToAdd) {
+      const combo = new Combo(count, c, enhanced, shape);
+      this.combos[c].push(combo);
+    }
+    return true;
   }
 }
 
@@ -1093,6 +1527,8 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined) {
       }
     }
   }
+  // Fuzzy match with the name.
+  // This prioritizes values with consecutive letters.  
   for (const card of searchArray) {
     if (result.length >= maxResults) {
       break;
@@ -1101,7 +1537,6 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined) {
       continue;
     }
     const name = card.name.toLowerCase();
-    // Fuzzy match with the name.
     let currentStringIdx = -1;
     for (const c of text) {
       currentStringIdx = name.indexOf(c, currentStringIdx + 1);
@@ -1243,7 +1678,7 @@ class Idc {
     // Set to 7 for 7x6 and 5 for 5x4. Defaults to 6x5.
     this.boardWidth = 6;
 
-    this.combos = [];
+    this.combos = new ComboContainer();
 
     this.monsterEditingIndex = 0;
 
@@ -1948,9 +2383,12 @@ class Idc {
     const layoutLeft = document.createElement('td');
     layoutLeft.style.paddingRight = '10px';
     layoutLeft.style.verticalAlign = 'top';
+    const layoutMiddle = document.createElement('td');
+    layoutMiddle.style.verticalAlign = 'top';
     const layoutRight = document.createElement('td');
-    layoutRight.style.verticalAlign = 'top';
+    layoutRight.verticalAlign = 'top';
     layoutTopRow.appendChild(layoutLeft);
+    layoutTopRow.appendChild(layoutMiddle);
     layoutTopRow.appendChild(layoutRight);
     layout.appendChild(layoutTopRow);
 
@@ -2002,7 +2440,7 @@ class Idc {
     //   teamScaling = Number(zoomEl.value) / 100;
     //   this.reloadTeamIcons();
     // }
-    // layoutRight.appendChild(zoomEl);
+    // layoutMiddle.appendChild(zoomEl);
     const titleElement = document.createElement('input');
     titleElement.id = 'idc-team-title';
     titleElement.value = 'Team Name';
@@ -2011,8 +2449,8 @@ class Idc {
     titleElement.onkeyup = () => {
       this.title = titleElement.value;
     };
-    layoutRight.appendChild(titleElement);
-    layoutRight.appendChild(this.createTeamsForm());
+    layoutMiddle.appendChild(titleElement);
+    layoutMiddle.appendChild(this.createTeamsForm());
     const descriptionElement = document.createElement('textarea');
     descriptionElement.id = 'idc-team-description';
     descriptionElement.setAttribute('style',
@@ -2021,7 +2459,9 @@ class Idc {
     descriptionElement.onkeyup = () => {
       this.description = descriptionElement.value;
     };
-    layoutRight.appendChild(descriptionElement);
+    layoutMiddle.appendChild(descriptionElement);
+
+    layoutRight.appendChild(this.combos.createElement(this));
 
     form.appendChild(layout);
 
