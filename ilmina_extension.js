@@ -180,9 +180,6 @@ const Id = {
 
 
 function annotateMonsterScaling() {
-  if (window.localStorage.annotatedScaling) {
-    return;
-  }
   const VALID_SCALES = new Set([0.7, 1.0, 1, 1.5]);
   for (const id in vm.model.cards) {
     const c = vm.model.cards[id];
@@ -203,7 +200,6 @@ function annotateMonsterScaling() {
       c.rcvGrowth = rcvGrowth;
     }
   }
-  window.localStorage.annotatedScaling = true;
 }
 
 annotateMonsterScaling();
@@ -272,6 +268,22 @@ class MonsterInstance {
 
     if (this.id) {
       this.setId(this.id);
+    }
+  }
+
+  toJson() {
+    return {
+      id: this.id,
+      level: this.level,
+      awakenings: this.awakenings,
+      latents: [...this.latents],
+      superAwakeningIdx: this.superAwakeningIdx,
+      hpPlus: this.hpPlus,
+      atkPlus: this.atkPlus,
+      rcvPlus: this.rcvPlus,
+      inheritId: this.inheritId,
+      inheritLevel: this.inheritLevel,
+      inheritPlussed: this.inheritPlussed,
     }
   }
 
@@ -347,6 +359,10 @@ class MonsterInstance {
       this.setAtkPlus(0);
       this.setRcvPlus(0);
       this.inheritId = -1;
+    } else {
+      this.setHpPlus(99);
+      this.setAtkPlus(99);
+      this.setRcvPlus(99);
     }
 
     this.card = c;
@@ -872,6 +888,20 @@ class MonsterInstance {
   }
 }
 
+MonsterInstance.fromJson = function(json) {
+  monster = new MonsterInstance(json.id);
+  monster.level = json.level || 1;
+  monster.awakenings = json.awakenings || 0;
+  monster.latents = [...(json.latents || [])];
+  monster.superAwakeningIdx = json.superAwakeningIdx >= 0 ? json.superAwakeningIdx : -1;
+  monster.hpPlus = json.hpPlus || 0;
+  monster.atkPlus = json.atkPlus || 0;
+  monster.inheritId = json.inheritId || -1;
+  monster.inheritLevel = json.inheritLevel || 1;
+  monster.inheritPlussed = json.inheritPlussed || false;
+  return monster;
+}
+
 function testAnother() {
   const another = new MonsterInstance(2568);
   another.setLevel(110);
@@ -1087,6 +1117,86 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined) {
   return result;
 }
 
+class StoredTeams {
+  constructor() {
+    this.teams = {};
+    if (window.localStorage.idcStoredTeams) {
+      this.teams = JSON.parse(window.localStorage.idcStoredTeams);
+    }
+  }
+
+  loadTeam(name) {
+    if (name in this.teams) {
+      return this.teams[name];
+    }
+  }
+
+  saveTeam(teamJson) {
+    this.teams[teamJson.title] = teamJson;
+    window.localStorage.idcStoredTeams = JSON.stringify(this.teams);
+  }
+
+  deleteTeam(title) {
+    delete this.teams[title];
+    window.localStorage.idcStoredTeams = JSON.stringify(this.teams);    
+  }
+
+  printTeams() {
+    for (const teamName in this.teams) {
+      console.log(`${teamName}: ${this.teams[teamName].title}`);
+    }
+  }
+
+  reload(idc) {
+    const old = document.getElementById('idc-save-load');
+    const parent = old.parentElement;
+
+    const newEl = this.createElement(idc);
+    parent.insertBefore(newEl, old);
+    parent.removeChild(old);
+  }
+
+  createElement(idc) {
+    const el = document.createElement('div');
+    el.id = 'idc-save-load';
+    const saveEl = document.createElement('div');
+    saveEl.id = 'idc-save-team';
+    saveEl.innerText = 'Save Team';
+    saveEl.onmouseover = () => saveEl.style.border = '1px solid white';
+    saveEl.onmouseleave = () => saveEl.style.border = '';
+
+    saveEl.onclick = () => {
+      idc.save();
+      this.reload(idc);
+    }
+    el.appendChild(saveEl);
+    for (const teamName in this.teams) {
+      const teamEl = document.createElement('div');
+      const loadEl = document.createElement('div');
+      loadEl.innerText = teamName;
+      loadEl.style.width = '80%';
+      loadEl.style.display = 'inline-block';
+      loadEl.onmouseover = () => loadEl.style.border = '1px solid white';
+      loadEl.onmouseleave = () => loadEl.style.border = '';
+      loadEl.onclick = () => {
+        idc.load(teamName);
+      }
+      teamEl.appendChild(loadEl);
+      const deleteEl = document.createElement('a');
+      deleteEl.innerText = 'x';
+      deleteEl.onmouseover = () => deleteEl.style.border = '1px solid white';
+      deleteEl.onmouseleave = () => deleteEl.style.border = '';
+      deleteEl.onclick = () => {
+        this.deleteTeam(teamName);
+        this.reload(idc);
+      }
+      teamEl.appendChild(deleteEl);
+      el.appendChild(teamEl);
+    }
+    return el;
+  }
+}
+
 
 class Idc {
   constructor() {
@@ -1140,7 +1250,47 @@ class Idc {
 
     this.title = '';
 
+    // TODO: Consider making this into an object with structuring.
     this.description = '';
+
+    this.saver = new StoredTeams();
+  }
+
+  toJson() {
+    return {
+      playerMode: this.playerMode,
+      title: this.title,
+      description: this.description,
+      monsters: this.monsters.map((monster) => monster.toJson()),
+    };
+  }
+
+  fromJson(json) {
+    this.playerMode = json.playerMode;
+    this.title = json.title;
+    this.description = this.description;
+    this.monsters = json.monsters.map((monsterJson) => MonsterInstance.fromJson(monsterJson));
+  }
+
+  save() {
+    this.saver.saveTeam(this.toJson());
+  }
+
+  load(title) {
+    const teamJson = this.saver.loadTeam(title);
+    if (!teamJson) {
+      return;
+    }
+    this.fromJson(teamJson);      
+    this.monsterEditingIndex = 0;
+    document.getElementById('idc-team-title').value = this.title;
+    document.getElementById('idc-team-description').value = this.description;
+    this.reloadTeamIcons();
+    this.reloadMonsterEditor();
+  }
+
+  viewTeams() {
+    this.saver.printTeams();
   }
 
   setPlayerMode(newMode) {
@@ -1221,10 +1371,6 @@ class Idc {
     }
     this.teamForm = playerTeams;
     return playerTeams;
-  }
-
-  reloadMonsterIds() {
-    // TODO
   }
 
   reloadAwakeningEditor() {
@@ -1784,6 +1930,11 @@ class Idc {
     return monsterEditor;
   }
 
+  createSaveLoad() {
+    const saveLoadContainer = document.createElement('div');
+
+  }
+
   createForm() {
     // Remove the form if it doesn't already exist.
     const existingForm = document.getElementById(Id.CONTAINER);
@@ -1799,6 +1950,7 @@ class Idc {
     const layoutTopRow = document.createElement('tr');
     const layoutLeft = document.createElement('td');
     layoutLeft.style.paddingRight = '10px';
+    layoutLeft.style.verticalAlign = 'top';
     const layoutRight = document.createElement('td');
     layoutRight.style.verticalAlign = 'top';
     layoutTopRow.appendChild(layoutLeft);
@@ -1817,7 +1969,7 @@ class Idc {
       console.log(`RCV multi: ${monster.getRcv(true)}`);
     }
 
-    form.appendChild(debugButton);
+    layoutLeft.appendChild(debugButton);
 
     // Player Mode controller.
     const playerModeRadio = document.createElement('div');
@@ -1843,6 +1995,7 @@ class Idc {
     }
     layoutLeft.appendChild(playerModeRadio);
     layoutLeft.appendChild(this.createMonsterEditor());
+    layoutLeft.appendChild(this.saver.createElement(this));
     // TODO: update (latent) elements so that when updated, their heights also change.
     // const zoomEl = document.createElement('input');
     // zoomEl.type = 'number';
@@ -1854,6 +2007,7 @@ class Idc {
     // }
     // layoutRight.appendChild(zoomEl);
     const titleElement = document.createElement('input');
+    titleElement.id = 'idc-team-title';
     titleElement.value = 'Team Name';
     titleElement.setAttribute('style',
         'background-color: black; border: none; color: white; width: 100%; font-size: medium;');
@@ -1863,8 +2017,9 @@ class Idc {
     layoutRight.appendChild(titleElement);
     layoutRight.appendChild(this.createTeamsForm());
     const descriptionElement = document.createElement('textarea');
+    descriptionElement.id = 'idc-team-description';
     descriptionElement.setAttribute('style',
-        'background-color: black; border: none; color: white; width: 100%;');
+        'background-color: black; border: none; color: white; width: 100%; height: 300px;');
     descriptionElement.value = 'Team Description';
     descriptionElement.onkeyup = () => {
       this.description = descriptionElement.value;
@@ -1903,6 +2058,7 @@ function testIdc() {
   }
   const idc = new Idc();
   idc.createForm();
+  console.log(idc);
 }
 
 testIdc();
