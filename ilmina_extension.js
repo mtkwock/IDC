@@ -56,20 +56,21 @@ const baseLeaderSkill = Object.freeze({
   hp: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 1;
   },
-  atk: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+  atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 1;
   },
-  rcv: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+  // Recovery multiplier applied to monsters before comboing.
+  rcv: (monster, team, percentHp, skillUsed, isMultiplayer) => {
     return 1;
   },
-  // // Recovery multiplier as a result of matching combos.
-  // rcvConditional: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-  //   return 1;
-  // },
-  damageMult: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+  // Recovery multiplier as a result of matching combos.
+  rcvPost: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 1;
   },
-  resist: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer, opponent) => {
+  damageMult: (enemy, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+    return 1;
+  },
+  resist: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer, opponent) => {
     return 1;
   },
   drop: (isMultiplayer) => {
@@ -82,13 +83,13 @@ const baseLeaderSkill = Object.freeze({
     return 1;
   },
   // Additive values
-  plusCombo: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+  plusCombo: (team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 0;
   },
   timeExtend: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 0;
   },
-  heal: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+  heal: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 0;
   },
   // Concatenating values.
@@ -110,6 +111,16 @@ function copyBase() {
 
 function createLeaderSkill(configs) {
   return Object.assign(copyBase(), configs);
+}
+
+function idxsFromBits(bits) {
+  const idxs = [];
+  for (let idx = 0; bits >> idx; idx++) {
+    if (bits >> idx && 1) {
+      idxs.push(idx);
+    }
+  }
+  return idxs;
 }
 
 function combineLeaderSkills(ls1, ls2) {
@@ -148,6 +159,9 @@ function combineLeaderSkills(ls1, ls2) {
     },
     rcv: (...args) => {
       return ls1.rcv(...args) * ls2.rcv(...args);
+    },
+    rcvPost: (...args) => {
+      return ls1.rcvPost(...args) * ls2.rcvPost(...args);
     },
     shield: (...args) => {
       return ls1.shield(...args) * ls2.shield(...args);
@@ -208,45 +222,83 @@ ATTRIBUTE_FLAG_PAIRS = [
   [4, 1 << 4],  // Dark
 ];
 
-// 144 (10010000) = Dragon & Devil
 
 /**
-0: "Evo"
-1: "Balanced"
-2: "Physical"
-3: "Healer"
-4: "Dragon"
-5: "God"
-6: "Attacker"
-7: "Devil"
-8: "Machine"
-9: "UNKNOWN9"
-10: "UNKNOWN10"
-11: "UNKNOWN11"
-12: "Awakening"
-13: "UNKNOWN13"
-14: "Enhance"
-15: "Redeemable"
-**/
+ * 0: "Evo"
+ * 1: "Balanced"
+ * 2: "Physical"
+ * 3: "Healer"
+ * 4: "Dragon"
+ * 5: "God"
+ * 6: "Attacker"
+ * 7: "Devil"
+ * 8: "Machine"
+ * 9: "UNKNOWN9"
+ * 10: "UNKNOWN10"
+ * 11: "UNKNOWN11"
+ * 12: "Awakening"
+ * 13: "UNKNOWN13"
+ * 14: "Enhance"
+ * 15: "Redeemable"
+ **/
+
+// IDs 116 and 138 are combinations of leader skills.
+function multipleLeaderSkills(params) {
+  let [first, remaining] = params;
+  let ls = getLeaderSkillEffects(first);
+  if (!remaining.length) {
+    remaining = [remaining];
+  }
+  for (const leaderSkillId of remaining) {
+    ls = combineLeaderSkills(ls, getLeaderSkillEffects(leaderSkillId));
+  }
+  return ls;
+}
+
+// 119 + 159
+// For leader skills that scale damage based on linked-orbs matched.
+// Each has a minimum and a maximum that can be applied.
+function atkScalingFromLinkedOrbs(params) {
+  const [attrBits, minMatch, atk100base] = params;
+  let atk100scale = 0;
+  let maxMatch = minMatch;
+  if (params.length > 3) {
+    atk100scale = params[3];
+    maxMatch = params[4];
+  }
+  const attrs = idxsFromBits(attrBits);
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      let highest = 0;
+      for (const attr of attrs) {
+        for (const combo of comboContainer.combos[COLOR_ORDER[attr]]) {
+          if (combo.count > highest) {
+            highest = combo.count;
+          }
+        }
+      }
+
+      if (highest < minMatch) {
+        return 1;
+      }
+      if (highest > maxMatch) {
+        highest = maxMatch;
+      }
+      return (atk100base + (highest - minMatch) * atk100scale) / 100;
+    },
+  })
+}
 
 /**
+ * 129
  * Multiplier for a monster whose attribute or type matches.
  * This also includes an optional passive resistance to attributes.
  */
 function baseStatFromAttributeType(params) {
   let [attrBits, typeBits, hp100, atk100, rcv100, ...remainder] = params;
-  const appliedAttributes = new Set();
-  for (let attr = 0; attrBits >> attr; attr++) {
-    if (attrBits >> attr & 1) {
-      appliedAttributes.add(attr);
-    }
-  }
-  const appliedTypes = new Set();
-  for (let type = 0; typeBits >> type; type++) {
-    if (typeBits >> type & 1) {
-      appliedTypes.add(type);
-    }
-  }
+  const appliedAttributes = new Set(idxsFromBits(attrBits));
+  const appliedTypes = new Set(idxsFromBits(typeBits));
   const hpMult = hp100 / 100 || 1;
   const atkMult = atk100 / 100 || 1;
   const rcvMult = rcv100 / 100 || 1;
@@ -274,8 +326,8 @@ function baseStatFromAttributeType(params) {
     hp: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       return monsterMatchesAttributeOrType(monster) ? hpMult : 1;
     },
-    atk: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-      return monsterMatchesAttributeOrType(monster) ? atkMult : 1;
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      return monsterMatchesAttributeOrType(ping.source) ? atkMult : 1;
     },
     rcv: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       return monsterMatchesAttributeOrType(monster) ? rcvMult : 1;
@@ -283,6 +335,54 @@ function baseStatFromAttributeType(params) {
   });
 }
 
+// 167
+function atkRcvScalingFromLinkedOrbs(params) {
+  const [attrBits, minMatch, atk100base, rcv100base, remaining] = params;
+  let atk100scale = 0;
+  let rcv100scale = 0;
+  let maxMatch = minMatch;
+  if (remaining) {
+    [atk100scale, rcv100scale, maxMatch] = remaining;
+  }
+  const attrs = idxsFromBits(attrBits);
+
+  function getHighest(comboContainer) {
+    let highest = 0;
+    for (const attr of attrs) {
+      for (const combo of comboContainer.combos[COLOR_ORDER[attr]]) {
+        if (combo.count > highest) {
+          highest = combo.count;
+        }
+      }
+    }
+    return highest;
+  }
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      let matched = getHighest(comboContainer);
+      if (matched < minMatch) {
+        return 1;
+      }
+      if (matched > maxMatch) {
+        matched = maxMatch;
+      }
+      return (atk100base + (matched - minMatch) * atk100scale) / 100;
+    },
+    rcvPost: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      let matched = getHighest(comboContainer);
+      if (matched < minMatch) {
+        return 1;
+      }
+      if (matched > maxMatch) {
+        matched = maxMatch;
+      }
+      return (rcv100base + (matched - minMatch) * rcv100scale) / 100;
+    }
+  })
+}
+
+// 182, e.g. Vonia.
 function atkShieldFromLinkedOrbs(params) {
   const [attrBits, minMatched, atk100, resistance] = params;
   const atkMult = atk100 / 100 || 1;
@@ -302,32 +402,132 @@ function atkShieldFromLinkedOrbs(params) {
   };
 
   return createLeaderSkill({
-    atk: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       return linkedOrbExists(comboContainer) ? atkMult : 1;
     },
-    damageMult: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+    damageMult: (enemy, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       return linkedOrbExists(comboContainer) ? damageMult : 1;
     },
   });
 }
 
-function multipleLeaderSkills(params) {
-  let [first, remaining] = params;
-  let ls = getLeaderSkillEffects(first);
-  if (!remaining.length) {
-    remaining = [remaining];
+// 183
+function atkShieldFromHp(params) {
+  const [attrBits, typeBits, minThreshPercent, aboveAtk100, aboveShield100, remaining] = params;
+  const aboveAtk = (aboveAtk100 / 100) || 1;
+  const aboveDamageMult = 1 - (aboveShield100 / 100);
+  let maxThreshPercent = 100;
+  let belowAtk = 1;
+  let belowDamageMult = 1;
+  if (remaining) {
+    maxThreshPercent = params[5];
+    belowAtk = (params[6] / 100) || 1;
+    belowDamageMult = 1 - (params[6] / 100);
   }
-  for (const leaderSkillId of remaining) {
-    ls = combineLeaderSkills(ls, getLeaderSkillEffects(leaderSkillId));
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      let multiplier = 1;
+      if (percentHp >= minThreshPercent) {
+        multiplier *= aboveAtk;
+      }
+      if (percentHp < maxThreshPercent) {
+        multiplier *= belowAtk;
+      }
+      return multiplier;
+    },
+    damageMult: (enemy, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      let multiplier = 1;
+      if (percentHp >= minThreshPercent) {
+        multiplier *= aboveDamageMult;
+      }
+      if (percentHp < maxThreshPercent) {
+        multiplier *= belowDamageMult;
+      }
+      return multiplier;
+
+    }
+  })
+}
+
+// 185, e.g. Karin Shindou [Dark Color].
+function moveTimeAndBaseStatFromAttributeType(params) {
+  const [ms100, attrBits, typeBits, hp100, atk100, rcv100] = params;
+  const leaderSkill = baseStatFromAttributeType(
+      [attrBits, typeBits, hp100, atk100, rcv100]);
+  leaderSkill.timeExtend = () => (ms100 / 100);
+  return leaderSkill;
+}
+
+// 186, e.g. Tifa's 7x6 + flat boost.
+function bigBoardAndBaseStatFromAttributeType(params) {
+  const [attrBits, typeBits, hp100, atk100, rcv100] = params;
+  const leaderSkill = baseStatFromAttributeType(
+      [attrBits, typeBits, hp100, atk100, rcv100]);
+  leaderSkill.bigBoard = () => true;
+  return leaderSkill
+}
+
+// 194
+function atkAndCombosFromRainbow(params) {
+  const [attrBits, minColors, atk100, comboBonus] = params;
+  const attrs = idxsFromBits(attrBits);
+
+  function didActivate(monsters, comboContainer) {
+    // First find relevant colors that were matched.
+    return matchedAttr = attrs.filter((attr) => {
+      return comboContainer[COLOR_ORDER[attr]].length > 0;
+    }).filter((attr) => {
+      // Then find if the team attacked with those colors.
+      return attr > 4 || team.some((monster) => {
+        return (
+            ((monster.attribute || monster.getCard().attribute) == attr) ||
+            (monster.getCard().subattribute == attr));
+      });
+    }).length >= minColors;
   }
-  return ls;
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      return atk100 && atk100 != 100 && didActivate(team, comboContainer) ? atk100 / 100 : 1;        
+    },
+    plusCombo: (team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      return didActivate(team, comboContainer) ? atk100 / 100 : 1;
+    },
+  });
+}
+
+// 200
+function trueBonusFromLinkedOrbs(params) {
+  const [attrBits, minLinked, damage] = params;
+
+  const attrs = idxsFromBits(attrBits);
+
+  return createLeaderSkill({
+    trueBonusAttack: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      for (const attr of attrs) {
+        for (const combo of comboContainer.combos[COLOR_ORDER[attr]]) {
+          if (combo.count > minLinked) {
+            return [damage];
+          }
+        }
+      }
+      return [];
+    }
+  })
 }
 
 const LEADER_SKILL_GENERATORS = {
   116: multipleLeaderSkills,
+  119: atkScalingFromLinkedOrbs,
   129: baseStatFromAttributeType,
   138: multipleLeaderSkills,
+  159: atkScalingFromLinkedOrbs,
+  167: atkRcvScalingFromLinkedOrbs,
   182: atkShieldFromLinkedOrbs,
+  186: bigBoardAndBaseStatFromAttributeType,
+  194: atkAndCombosFromRainbow,
+  200: trueBonusFromLinkedOrbs,
 }
 
 function getLeaderSkillEffects(leaderSkillId) {
@@ -1962,6 +2162,13 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined) {
   return result;
 }
 
+const Round = {
+  UP: Math.ceil,
+  NEAREST: Math.round,
+  DOWN: Math.floor,
+  NONE: (a) => a,
+}
+
 class StoredTeams {
   constructor() {
     this.teams = {};
@@ -2056,8 +2263,8 @@ class DamagePing {
     this.amount += amount;
   }
 
-  multiply(multiplier) {
-    this.amount = Math.round(this.amount * multiplier);
+  multiply(multiplier, round = Round.NEAREST) {
+    this.amount = round(this.amount * multiplier);
   }
 }
 
@@ -2122,6 +2329,8 @@ class Idc {
     // TODO: Make this updatable.
     this.effects = {
       awakenings: true,
+      burst: () => 1,
+      rcvBoost: () => 1,
     }
 
     // TODO: Make this updatable.
@@ -2224,49 +2433,10 @@ class Idc {
     let monsters = this.getActiveTeam();
     const lead = getLeaderSkillEffects(monsters[0].getCard().leaderSkillId);
     const helper = getLeaderSkillEffects(monsters[5].getCard().leaderSkillId);
-    const awakeningLeaderSkill = {
-      atk: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-        let multiplier = 1;
-        const comboCount = comboContainer.comboCount();
-        // Handle 7c.
-        if (comboCount >= 7) {
-          multiplier *= (2 ** monster.countAwakening(IdcAwakening.COMBO_7, isMultiplayer));
-          if (comboCount >= 10) {
-            // Handle 10c.
-            multiplier *= (5 ** monster.countAwakening(IdcAwakening.COMBO_10, isMultiplayer));
-          }
-        }
-        // Handle >80%.
-        if (percentHp >= 80) {
-          multiplier *= (1.5 ** monster.countAwakening(IdcAwakening.HP_GREATER, isMultiplayer));
-        }
-        // Handle <=50%.
-        if (percentHp <= 50) {
-          multiplier *= (2 ** monster.countAwakening(IdcAwakening.HP_LESSER, isMultiplayer));
-        }
-        // Handle Super Bonus Attack.
-        if (comboContainer.combos['h'].some((combo) => combo.shape == Shape.BOX)) {
-          multiplier *= 2;
-        }
-        return multiplier;
-      },
-    };
-    // Row Leader skill?
-    // 7c Leader skill?
-    monsters = monsters.filter((monster) => monster.id && monster.id >= 0);
-    let pings = Array(2 * monsters.length);
-
-    // Set up pings.
-    for (let i = 0; i < monsters.length; i++) {
-      pings[i] = new DamagePing(monsters[i], monsters[i].attribute >= 0 ? monsters[i].attribute : monsters[i].getCard().attribute);
-      if (monsters[i].getCard().subattribute) {
-        pings[i + monsters.length] = new DamagePing(monsters[i], monsters[i].getCard().subattribute, true);
-      }
-    }
-    pings = pings.filter((ping) => !!ping);
-
+    const MP = this.isMultiplayer();
+    const percent = this.getHpPercent();
     const countAwakenings = (awakening) => {
-      return monsters.reduce((total, monster) => total + monster.countAwakening(awakening, this.isMultiplayer()), 0);
+      return monsters.reduce((total, monster) => total + monster.countAwakening(awakening, MP), 0);
     }
 
     const enhancedCounts = {
@@ -2287,6 +2457,50 @@ class Idc {
         4: countAwakenings(IdcAwakening.ROW_DARK),
         5: countAwakenings(IdcAwakening.RECOVER_BIND),
     }
+    const awakeningLeaderSkill = {
+      atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+        let multiplier = 1;
+        const comboCount = comboContainer.comboCount();
+        // Handle 7c.
+        if (comboCount >= 7) {
+          multiplier *= (2 ** ping.source.countAwakening(IdcAwakening.COMBO_7, MP));
+          if (comboCount >= 10) {
+            // Handle 10c.
+            multiplier *= (5 ** ping.source.countAwakening(IdcAwakening.COMBO_10, MP));
+          }
+        }
+        // Handle >80%.
+        if (percentHp >= 80) {
+          multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.HP_GREATER, MP));
+        }
+        // Handle <=50%.
+        if (percentHp <= 50) {
+          multiplier *= (2 ** ping.source.countAwakening(IdcAwakening.HP_LESSER, MP));
+        }
+        // Handle Super Bonus Attack.
+        if (comboContainer.combos['h'].some((combo) => combo.shape == Shape.BOX)) {
+          multiplier *= 2;
+        }
+        // Handle Rows.
+        if (rowCounts[ping.attribute]) {
+          multiplier *= 1 + 0.15 * rowCounts[ping.attribute];
+        }
+        return multiplier;
+      },
+    };
+    // Row Leader skill?
+    // 7c Leader skill?
+    monsters = monsters.filter((monster) => monster.id && monster.id >= 0);
+    let pings = Array(2 * monsters.length);
+
+    // Set up pings.
+    for (let i = 0; i < monsters.length; i++) {
+      pings[i] = new DamagePing(monsters[i], monsters[i].attribute >= 0 ? monsters[i].attribute : monsters[i].getCard().attribute);
+      if (monsters[i].getCard().subattribute) {
+        pings[i + monsters.length] = new DamagePing(monsters[i], monsters[i].getCard().subattribute, true);
+      }
+    }
+    pings = pings.filter((ping) => !!ping);
 
     // Sum combos.
     for (const c of 'rbgld') {
@@ -2311,19 +2525,21 @@ class Idc {
           }
           // Handle TPA
           if (combo.count == 4) {
-            multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.TPA, this.isMultiplayer()));
+            multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.TPA, MP));
           }
           // Handle L
           if (combo.shape == Shape.L) {
-            multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.L_UNLOCK, this.isMultiplayer()));
+            multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.L_UNLOCK, MP));
           }
           // Handle VDP
           if (combo.shape == Shape.BOX) {
-            multiplier *= (2.5 ** ping.source.countAwakening(IdcAwakening.VDP, this.isMultiplayer()));
+            multiplier *= (2.5 ** ping.source.countAwakening(IdcAwakening.VDP, MP));
             ping.vdp = true;
           }
-          const baseAtk = ping.source.getAtk(this.isMultiplayer(), this.effects.awakenings);
-          ping.add(Math.round(baseAtk * multiplier));
+          const baseAtk = ping.source.getAtk(MP, this.effects.awakenings);
+          // When adding a single match of damage, the value is always rounded up.
+          // e.g. A monster with 1atk making a 4-match (1.25x) will do 2 damage.
+          ping.add(Math.ceil(baseAtk * multiplier));
         }
       }
     }
@@ -2336,6 +2552,9 @@ class Idc {
     let teamRcvAwakenings = 0;
     const trueBonusAttacks = [0];
 
+    // No matching conditionals for this recovery.
+    const partialRcv = (lead, monster) => lead.rcv(monster, monsters, percent, this.skillUsed, MP);
+
     for (const combo of this.combos.combos['h']) {
       let multiplier = (combo.count + 1) * 0.25;
       if (combo.enhanced) {
@@ -2345,54 +2564,49 @@ class Idc {
       for (const monster of monsters) {
         let rcv = monster.getRcv();
         if (combo.count == 4) {
-          rcv *= (1.5 ** monster.countAwakening(Idc.OE_HEART, this.isMultiplayer()));
+          rcv *= (1.5 ** monster.countAwakening(Idc.OE_HEART, MP));
         }
         if (combo.shape == Shape.COLUMN &&
-            monster.countAwakening(IdcAwakening.BONUS_ATTACK, this.isMultiplayer())) {
+            monster.countAwakening(IdcAwakening.BONUS_ATTACK, MP)) {
           bonusAttacks[0] += 1;
         }
         if (combo.shape == Shape.BOX) {
-          bonusAttacks[0] += (99 * monster.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER, this.isMultiplayer()));
+          bonusAttacks[0] += (99 * monster.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER, MP));
         }
         const rcvMult = (
-            lead.rcv(monster, monsters, this.getHpPercent(), this.skillUsed, this.isMultiplayer()) *
-            helper.rcv(monster, monsters, this.getHpPercent(), this.skillUsed, this.isMultiplayer()));
-        healing += Math.round(rcv * multiplier * rcvMult);
+            partialRcv(lead, monster) *
+            partialRcv(helper, monster));
+        healing += Math.ceil(rcv * multiplier * rcvMult);
       }
     }
 
     // Add combos with Leader skill.
     this.combos.bonusCombos = (
-      lead.plusCombo(null, monsters, this.getHpPercent(), this.combos, this.skillUsed, this.isMultiplayer()) +
-      helper.plusCombo(null, monsters, this.getHpPercent(), this.combos, this.skillUsed, this.isMultiplayer()));
+      lead.plusCombo(monsters, percent, this.combos, this.skillUsed, MP) +
+      helper.plusCombo(monsters, percent, this.combos, this.skillUsed, MP));
 
     const comboMultiplier = this.combos.comboCount() * 0.25 + 0.75;
 
     for (const ping of pings) {
       ping.multiply(comboMultiplier);
     }
-    healing = Math.round(healing * comboMultiplier);
+    healing = Math.ceil(healing * comboMultiplier);
+
+    // Apply awakenings.
+    // For some reason, this is a Round.NEAREST for rows.
+    // This may need to be split out if other things like SFua cause it to behave differently.
+    const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.skillUsed, MP);
+    for (const ping of pings) {
+      ping.multiply(partialLead(awakeningLeaderSkill, ping), Round.NEAREST);
+    }
 
     // Apply leader skills.
-    const partialLead = (leader, monster) => leader.atk(monster, monsters, this.getHpPercent(), this.combos, this.skillUsed, this.isMultiplayer());
     for (const ping of pings) {
-      const l = partialLead(lead, ping.source);
-      const h = partialLead(helper, ping.source);
-      const a = partialLead(awakeningLeaderSkill, ping.source);
-      ping.multiply(l * h * a);
+      const multiplier = partialLead(lead, ping) * partialLead(helper, ping);
+      ping.multiply(multiplier, Round.UP);
     }
-
-    for (const attribute in rowCounts) {
-      if (!rowCounts[attribute]) {
-        continue;
-      }
-      const multiplier = 1 + 0.15 * rowCounts[attribute];
-      for (const ping of pings) {
-        if (ping.attribute == attribute) {
-          ping.multiply(multiplier);
-        }
-      }
-    }
+    // Cleanup.
+    this.combos.bonusCombos = 0;
 
     return {
       pings: pings,
@@ -3070,17 +3284,13 @@ class Idc {
 
     const debugButton = document.createElement('button');
     debugButton.innerText = 'DEBUG';
-    // debugButton.onclick = () => {
-    //   const monster = this.monsters[this.monsterEditingIndex];
-    //   console.log(`HP   solo: ${monster.getHp(false)}`);
-    //   console.log(`HP  multi: ${monster.getHp(true)}`);
-    //   console.log(`ATK  solo: ${monster.getAtk(false)}`);
-    //   console.log(`ATK multi: ${monster.getAtk(true)}`);
-    //   console.log(`RCV  solo: ${monster.getRcv(false)}`);
-    //   console.log(`RCV multi: ${monster.getRcv(true)}`);
-    // }
     debugButton.onclick = () => {
+      const mp = this.isMultiplayer();
       console.log(`Team HP: ${this.getHp()}`);
+      for (const monster of this.getActiveTeam()) {
+        console.log(monster.getCard().name);
+        console.log(`HP: ${monster.getHp(mp)} ATK: ${monster.getAtk(mp)} RCV: ${monster.getRcv(mp)}`);
+      }
       console.log(this.getDamagePre());
     }
 
@@ -3150,16 +3360,12 @@ class Idc {
     this.reloadSelector();
   }
 
-  addCombo(combo) {
-    
-  }
-
-  removeCombo(idx) {
-    if (idx < 0 || idx >= this.combos.length) {
-      throw `Cannot remove idx ${idx} from combos with length ${this.combos.length}`;
-    }
-    this.combos = [...this.combos.slice(0, idx), ...this.combos.slice(idx + 1, this.combos.length)];
-  }
+  // removeCombo(idx) {
+  //   if (idx < 0 || idx >= this.combos.length) {
+  //     throw `Cannot remove idx ${idx} from combos with length ${this.combos.length}`;
+  //   }
+  //   this.combos = [...this.combos.slice(0, idx), ...this.combos.slice(idx + 1, this.combos.length)];
+  // }
 
   // For no-skyfall leads, calculate remaining orbs on board.
   getRemainingOrbs() {
