@@ -881,4 +881,4 @@ function testVoniaLs() {
   }
 }
 
-// testVoniaLs();
+console.log('Leader skills initialized.');
