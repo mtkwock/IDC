@@ -247,6 +247,24 @@ function atkBoostFromMinCombos(params) {
   });
 }
 
+// 98
+function atkScalingFromCombos(params) {
+  const [minCombo, atk100base, atk100scale, maxCombo] = params;
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      let count = comboContainer.comboCount();
+      if (count < minCombo) {
+        return 1;
+      }
+      if (count > maxCombo) {
+        count = maxCombo;
+      }
+
+      return ((count - minCombo) * atk100scale + atk100base) / 100;
+    },
+  });
+}
 
 /**
  * 0: "Evo"
@@ -457,6 +475,21 @@ function atkRcvColorShieldFromSubHp(params) {
         return 1;
       }
       return damageMult(monster, team, percentHp, comboContainer, skillUsed, isMultiplayer);
+    },
+  });
+}
+
+// 133
+function atkRcvFromSkillUse(params) {
+  const [attrBits, typeBits, atk100, rcv100] = params;
+  const {atk, rcv} = baseStatFromAttributeType([attrBits, typeBits, 0, atk100, rcv100 || 0]);
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      return skillUsed ? atk(ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) : 1;
+    },
+    rcvPost: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      return skillUsed ? rcv(monster, team, isMultiplayer) : 1;
     },
   });
 }
@@ -867,12 +900,15 @@ const LEADER_SKILL_GENERATORS = {
   15: pureTimeExtend,
   61: atkScalingFromMatchedColors,
   66: atkBoostFromMinCombos,
+  98: atkScalingFromCombos,
+  101: atkBoostFromExactCombos,
   116: multipleLeaderSkills,
   119: atkScalingFromLinkedOrbs,
   122: atkRcvFromSubHp,
   124: atkScalingFromMatchedColors,
   129: baseStatFromAttributeType,
   130: atkRcvColorShieldFromSubHp,
+  133: atkRcvFromSkillUse,
   138: multipleLeaderSkills,
   155: statBoostFromMultiplayer,
   159: atkScalingFromLinkedOrbs,

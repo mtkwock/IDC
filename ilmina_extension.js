@@ -1920,7 +1920,7 @@ class Idc {
             helper(monster, monsters, this.isMultiplayer()));
         const hpBase = monster.getHp(this.isMultiplayer(), this.effects.awakenings);
         totalHp += Math.round(hpBase * hpMult);
-        teamHpAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set(IdcAwakening.TEAM_HP)).length;
+        teamHpAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set([IdcAwakening.TEAM_HP])).length;
       }
     }
     return Math.round(totalHp * (1 + 0.05 * teamHpAwakenings));
@@ -3020,6 +3020,7 @@ class Idc {
     hpPercentInput.type = 'number';
     hpPercentInput.id = 'idc-team-hp-percent';
     hpPercentInput.value = this.hpPercent;
+    hpPercentInput.style.width = '50px';
     hpPercentInput.onkeyup = () => {
       let hpPercent = hpPercentInput.value;
       if (!hpPercent || hpPercent <= 0) {
