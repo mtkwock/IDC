@@ -61,7 +61,7 @@ const baseLeaderSkill = Object.freeze({
   trueBonusAttack: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return [];
   },
-  bonusAttack: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+  bonusAttack: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer, awakeningsActive) => {
     return [];
   },
   // Returns a separate ping of damage per leader.
@@ -186,6 +186,17 @@ ATTRIBUTE_FLAG_PAIRS = [
   [3, 1 << 3],  // Light
   [4, 1 << 4],  // Dark
 ];
+
+// 12
+function bonusAttackScale(params) {
+  const scale = params[0] / 100;
+
+  return createLeaderSkill({
+    bonusAttack: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer, awakeningsActive) => {
+      return [monster.getAtk(isMultiplayer, awakeningsActive) * scale];
+    },
+  });
+}
 
 // 15
 function pureTimeExtend(params) {
@@ -339,6 +350,34 @@ function atkRcvFromSubHp(params) {
   });
 }
 
+// 124
+function atkScalingFromMatchedColors(params) {
+  let [attr1bit, attr2bit, attr3bit, attr4bit, attr5bit, minMatch, atk100base, atk100scale] = params;
+  atk100scale = atk100scale || 0;
+  const maxCounts = {};
+  for (const attrBit of [attr1bit, attr2bit, attr3bit, attr4bit, attr5bit].filter((bit) => bit > 0)) {
+    const attr = idxsFromBits(attrBit)[0];
+    if (attr in maxCounts) {
+      maxCounts[attr]++;
+    } else {
+      maxCounts[attr] = 1;
+    }
+  }
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      let total = 0;
+      for (const attr in maxCounts) {
+        total += Math.min(comboContainer.combos[COLOR_ORDER[attr]].length, maxCounts[attr])
+      }
+      if (total < minMatch) {
+        return 1;
+      }
+      return ((total - minMatch) * atk100scale + atk100base) / 100;
+    },
+  });
+}
+
 /**
  * 129
  * Multiplier for a monster whose attribute or type matches.
@@ -462,6 +501,23 @@ function stackingStatboostsForAttributes(params) {
       return getMultiplier(monster, rcvA, rcvB);
     },
   })
+}
+
+// 155
+function statBoostFromMultiplayer(params) {
+  const [attrBits, typeBits, hp100, atk100, rcv100] = params;
+  const {hp, atk, rcv} = baseStatFromAttributeType([attrBits, typeBits, hp100, atk100, rcv100]);
+  return createLeaderSkill({
+    hp: (monster, team, isMultiplayer) => {
+      return isMultiplayer ? hp(monster, team, isMultiplayer) : 1;
+    },
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      return isMultiplayer ? atk(ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) : 1;
+    },
+    rcv: (monster, team, isMultiplayer) => {
+      return isMultiplayer ? rcv(monster, team, isMultiplayer) : 1;
+    },
+  });
 }
 
 // 162
@@ -687,16 +743,17 @@ function atkShieldFromLinkedOrbs(params) {
 
 // 183
 function atkShieldFromHp(params) {
-  const [attrBits, typeBits, minThreshPercent, aboveAtk100, aboveShield100, ...remaining] = params;
+  let [attrBits, typeBits, minThreshPercent, aboveAtk100, aboveShield100, ...remaining] = params;
+  minThreshPercent = minThreshPercent || 0;
   const aboveAtk = (aboveAtk100 / 100) || 1;
-  const aboveDamageMult = 1 - (aboveShield100 / 100);
-  let maxThreshPercent = 100;
+  const damageMult = 1 - (aboveShield100 / 100);
+  let maxThreshPercent = 101;
   let belowAtk = 1;
-  let belowDamageMult = 1;
+  let rcvMult = 1;
   if (remaining) {
     maxThreshPercent = remaining[0];
-    belowAtk = (remaining[1] / 100) || 1;
-    belowDamageMult = 1 - (remaining[2] / 100);
+    belowAtk = (remaining[1] || 100) / 100;
+    rcvMult = (remaining[2] || 100) / 100;
   }
 
   return createLeaderSkill({
@@ -705,23 +762,18 @@ function atkShieldFromHp(params) {
       if (percentHp >= minThreshPercent) {
         multiplier *= aboveAtk;
       }
-      if (percentHp < maxThreshPercent) {
+      if (percentHp <= maxThreshPercent) {
         multiplier *= belowAtk;
       }
       return multiplier;
     },
+    rcvPost: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      return percentHp >= minThreshPercent || percentHp <= maxThreshPercent ? rcvMult : 1;
+    },
     damageMult: (enemy, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-      let multiplier = 1;
-      if (percentHp >= minThreshPercent) {
-        multiplier *= aboveDamageMult;
-      }
-      if (percentHp < maxThreshPercent) {
-        multiplier *= belowDamageMult;
-      }
-      return multiplier;
-
-    }
-  })
+      return percentHp >= minThreshPercent || percentHp <= maxThreshPercent ? damageMult : 1;
+    },
+  });
 }
 
 // 185, e.g. Karin Shindou [Dark Color].
@@ -811,15 +863,18 @@ function trueBonusFromLinkedOrbs(params) {
 }
 
 const LEADER_SKILL_GENERATORS = {
+  12: bonusAttackScale,
   15: pureTimeExtend,
   61: atkScalingFromMatchedColors,
   66: atkBoostFromMinCombos,
   116: multipleLeaderSkills,
   119: atkScalingFromLinkedOrbs,
   122: atkRcvFromSubHp,
+  124: atkScalingFromMatchedColors,
   129: baseStatFromAttributeType,
   130: atkRcvColorShieldFromSubHp,
   138: multipleLeaderSkills,
+  155: statBoostFromMultiplayer,
   159: atkScalingFromLinkedOrbs,
   162: bigBoardLeader,
   167: atkRcvScalingFromLinkedOrbs,
@@ -828,6 +883,7 @@ const LEADER_SKILL_GENERATORS = {
   171: atkScalingAndShieldFromMatchedOrbs,
   177: atkBoostFromOrbsRemaining,
   182: atkShieldFromLinkedOrbs,
+  183: atkShieldFromHp,
   185: moveTimeAndBaseStatFromAttributeType,
   186: bigBoardAndBaseStatFromAttributeType,
   192: atkAndCombosFromLinkedOrbs,

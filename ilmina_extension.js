@@ -414,7 +414,27 @@ class MonsterInstance {
   }
 
   getCard() {
-    return vm.model.cards[this.id];
+    if (this.id in vm.model.cards) {
+      return vm.model.cards[this.id];
+    }
+    return {
+      awakenings: [],
+      maxHp: 0,
+      minHp: 0,
+      hpGrowth: 0,
+      maxAtk: 0,
+      minAtk: 0,
+      atkGrowth: 0,
+      maxRcv: 0,
+      minRcv: 0,
+      rcvGrowth: 0,
+      maxLevel: 1,
+      leaderSkillId: 0,
+      attribute: -1,
+      isLimitBreakable: false,
+      superAwakenings: [],
+      latentKillers: [],
+    };
   }
 
   getInheritCard() {
@@ -439,7 +459,7 @@ class MonsterInstance {
     if (filterSet) {
       filterFn = (awakening) => filterSet.has(awakening);
     }
-    const c = this.getCard();
+    const c = this.getCard() || {awakenings: []};
     let awakenings = c.awakenings.slice(0, this.awakenings);
     if (this.superAwakeningIdx > -1 && this.isSuperAwakeningActive(isMultiplayer)) {
       awakenings.push(c.superAwakenings[this.superAwakeningIdx]);
@@ -664,6 +684,8 @@ class MonsterInstance {
       inheritIdEl.innerText = '';
       inheritLevelEl.innerText = '';
       inheritPlusEl.innerText = '';
+      const inheritSubattributeEl = inheritEl.getElementsByClassName('idc-monster-icon-inherit-subattribute')[0];
+      inheritSubattributeEl.style.visibility = 'hidden';
     }
   }
 
@@ -1811,10 +1833,11 @@ class Idc {
     // TODO: Make this updatable.
     this.skillUsed = true;
 
+    this.hpPercent = 100;
   }
 
   getHpPercent() {
-    return 100;  // TODO: Make this value changeable.
+    return this.hpPercent;  // TODO: Make this value changeable.
   }
 
   toJson() {
@@ -1894,7 +1917,7 @@ class Idc {
         }
         const hpMult = (
             lead(monster, monsters, this.isMultiplayer()) * 
-            helper(monster, monsters, this,isMultiplayer()));
+            helper(monster, monsters, this.isMultiplayer()));
         const hpBase = monster.getHp(this.isMultiplayer(), this.effects.awakenings);
         totalHp += Math.round(hpBase * hpMult);
         teamHpAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set(IdcAwakening.TEAM_HP)).length;
@@ -2969,7 +2992,50 @@ class Idc {
   createLayoutRight() {
     const layoutRight = document.createElement('td');
     layoutRight.style.fontSize = 'small';
-    layoutRight.verticalAlign = 'top';
+    layoutRight.style.verticalAlign = 'top';
+
+    const playerActiveRadio = document.createElement('div');
+    for (let i = 0; i < 3; i++) {
+      const modeInput = document.createElement('input');
+      modeInput.type = 'radio';
+      modeInput.id = `idc-team-active-select${i + 1}`;
+      if (i == this.activeTeamIdx) {
+        modeInput.checked = true;
+      }
+      modeInput.name = 'idc-team-active-select';
+      modeInput.onclick = () => {
+        this.setActiveTeamIdx(i);
+        this.reloadStatDisplay();
+      }
+      playerActiveRadio.appendChild(modeInput);
+      const modeLabel = document.createElement('label');
+      modeLabel.for = modeInput.id;
+      modeLabel.innerText = `${i + 1}P`;
+      playerActiveRadio.appendChild(modeLabel)
+    }
+
+    layoutRight.appendChild(playerActiveRadio);
+
+    const hpPercentInput = document.createElement('input');
+    hpPercentInput.type = 'number';
+    hpPercentInput.id = 'idc-team-hp-percent';
+    hpPercentInput.value = this.hpPercent;
+    hpPercentInput.onkeyup = () => {
+      let hpPercent = hpPercentInput.value;
+      if (!hpPercent) {
+        hpPercent = 100;
+      }
+      if (hpPercent <= 0) {
+        hpPercent = 1;
+      }
+      if (hpPercent > 100) {
+        hpPercent = 100;
+      }
+      this.hpPercent = hpPercent;
+      hpPercentInput.value = hpPercent;
+      this.reloadStatDisplay();
+    }
+    layoutRight.appendChild(hpPercentInput);
 
     // 7 columns showing stats of the currently active team.
     const statDisplayEl = document.createElement('table');
