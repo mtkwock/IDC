@@ -7,6 +7,10 @@
 //     // });
 // });
 
+// chrome.browserAction.onClicked.addListener((tab) => {
+//   alert('icon clicked');
+// });
+
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   console.log(message);
 

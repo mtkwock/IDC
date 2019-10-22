@@ -18,7 +18,7 @@ const baseLeaderSkill = Object.freeze({
     return 0;
   },
   // Multiplicative values
-  hp: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+  hp: (monster, team, isMultiplayer) => {
     return 1;
   },
   atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
@@ -369,7 +369,7 @@ function baseStatFromAttributeType(params) {
   }
 
   return createLeaderSkill({
-    hp: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+    hp: (monster, team, isMultiplayer) => {
       return monsterMatchesAttributeOrType(monster) ? hpMult : 1;
     },
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
@@ -452,7 +452,7 @@ function stackingStatboostsForAttributes(params) {
   }
 
   return createLeaderSkill({
-    hp: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+    hp: (monster, team, isMultiplayer) => {
       return getMultiplier(monster, hpA, hpB);
     },
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {

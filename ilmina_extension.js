@@ -6,11 +6,18 @@
  *   Doing this in general can be dangrous if you don't trust
  *   the source of the code.
  *
- * This is currently meant to be pasted into console in ilmina.com.
- * 1) To open console, Right-Click anywhere on the page and click "Inspect" or "Inspect Element".
- * 2) At the top of the window or pane that was opened, click the Console tab.
- * 3) Copy this entire file and paste into Console and press "Enter."
- * 4) The tool will appear at the bottom of the page.
+ * To install this extension...
+ * 1) Download/clone folder from https://github.com/mtkwock/IDC
+ * 2) In Chrome, open chrome://extensions
+ * 3) In the top left, click "Load unpacked"
+ * 4) Navigate to the (uncompressed) folder of the download from GitHub
+ * 5) Click "Select" when in the folder.
+ * 6) Navigate to https://ilmina.com/#/ShowMeTheRopes
+ * 7) This should begin the app.
+
+ * To update
+ * 1) git pull
+ * 2) In chrome://extensions, click the Refresh button in the installed app.
  *
  * To use
  * Change Monster:
@@ -28,10 +35,6 @@
 // alert('I\'ll show you the ropes!');
 console.log('Ropes being shown');
 
-if (!vm) {
-  console.error('VM not yet loaded!');
-}
-
 {
 
 const Attribute = {
@@ -44,7 +47,7 @@ const Attribute = {
 
 const AWAKENING_SCALE = 0.7;
 const MONSTER_AWAKENING_SCALE = 0.43;
-const AWAKENING_NUMBERS = '⓪①②③④⑤⑥⑦⑧⑨';
+const AWAKENING_NUMBERS = '0123456789';
 let teamScaling = 0.6;
 
 // 11x 1-slot Latents
@@ -171,6 +174,7 @@ const Id = {
   CONTAINER: 'idc-container',
 };
 
+const BORDER_COLOR = '1px solid white';
 
 function annotateMonsterScaling() {
   const VALID_SCALES = new Set([0.7, 1.0, 1, 1.5]);
@@ -1131,6 +1135,10 @@ class ComboContainer {
 
   createElement(idc) {
     const el = document.createElement('div');
+    el.style.padding = '5px';
+    el.style.borderLeft = BORDER_COLOR;
+    el.style.borderRight = BORDER_COLOR;
+
     el.id = 'idc-combo-editor';
     const inputEl = document.createElement('input');
     inputEl.id = 'idc-combo-input';
@@ -1677,7 +1685,7 @@ class StoredTeams {
     saveEl.id = 'idc-save-team';
     saveEl.innerText = 'Save Team';
     saveEl.style.fontSize = 'large';
-    saveEl.onmouseover = () => saveEl.style.border = '1px solid white';
+    saveEl.onmouseover = () => saveEl.style.border = BORDER_COLOR;
     saveEl.onmouseleave = () => saveEl.style.border = '';
 
     saveEl.onclick = () => {
@@ -1691,7 +1699,7 @@ class StoredTeams {
       loadEl.innerText = teamName;
       loadEl.style.width = '95%';
       loadEl.style.display = 'inline-block';
-      loadEl.onmouseover = () => loadEl.style.border = '1px solid white';
+      loadEl.onmouseover = () => loadEl.style.border = BORDER_COLOR;
       loadEl.onmouseleave = () => loadEl.style.border = '';
       loadEl.onclick = () => {
         idc.load(teamName);
@@ -1699,7 +1707,7 @@ class StoredTeams {
       teamEl.appendChild(loadEl);
       const deleteEl = document.createElement('a');
       deleteEl.innerText = 'x';
-      deleteEl.onmouseover = () => deleteEl.style.border = '1px solid white';
+      deleteEl.onmouseover = () => deleteEl.style.border = BORDER_COLOR;
       deleteEl.onmouseleave = () => deleteEl.style.border = '';
       deleteEl.onclick = () => {
         this.deleteTeam(teamName);
@@ -1865,8 +1873,8 @@ class Idc {
         continue;
       }
       const hpMult = (
-          lead(monster, monsters, null, null, null, this.isMultiplayer()) * 
-          helper(monster, monsters, null, null, null, this.isMultiplayer()));
+          lead(monster, monsters, this.isMultiplayer()) * 
+          helper(monster, monsters, this.isMultiplayer()));
       const hpBase = monster.getHp(this.isMultiplayer(), this.effects.awakenings);
       totalHp += Math.round(hpBase * hpMult);
       teamHpAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set([IdcAwakening.TEAM_HP])).length;
@@ -1880,8 +1888,8 @@ class Idc {
           continue;
         }
         const hpMult = (
-            lead(monster, monsters, null, null, null, this.isMultiplayer()) * 
-            helper(monster, monsters, null, null, null, this,isMultiplayer()));
+            lead(monster, monsters, this.isMultiplayer()) * 
+            helper(monster, monsters, this,isMultiplayer()));
         const hpBase = monster.getHp(this.isMultiplayer(), this.effects.awakenings);
         totalHp += Math.round(hpBase * hpMult);
         teamHpAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set(IdcAwakening.TEAM_HP)).length;
@@ -1919,6 +1927,14 @@ class Idc {
         4: countAwakenings(IdcAwakening.ROW_DARK),
         5: countAwakenings(IdcAwakening.RECOVER_BIND),
     }
+    // TODO: split this into parts and ordered because these apply separately and round separately.
+    // >80% applies and rounds before rows.
+    // Known order:
+    // 80%/50%, Rows
+    // Unknown order
+    //  * 50% [Always independent of 80%, likely happens at the same time]
+    //  * Combo 7, Combo 10 [Probably happen at same time, unknown when.]
+    //  * SFua
     const awakeningLeaderSkill = {
       atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
         let multiplier = 1;
@@ -2312,8 +2328,8 @@ class Idc {
       for (let j = 0; j < 6; j++) {
         const fullContainer = document.getElementById(`idc-team${i}-member-container-${j}`);
         const idx = this.getMonsterIdx(i, j); 
-        if (idx == this.monsterEditingIndex && fullContainer.style.border != '1px solid white') {
-          fullContainer.style.border = '1px solid white';
+        if (idx == this.monsterEditingIndex && fullContainer.style.border != BORDER_COLOR) {
+          fullContainer.style.border = BORDER_COLOR;
         } else {
           fullContainer.style.border = '';
         }
@@ -2336,14 +2352,41 @@ class Idc {
         this.monsters[idx].updateLatentsIcon(latentsContainer);
         fullContainer.onclick = () => {
           this.monsterEditingIndex = idx;
+          this.chooseMonsterTab();
           this.reloadMonsterEditor();
           this.reloadSelector();
+          const selector = document.getElementById('idc-selector-monster');
+          selector.focus();
+          selector.select();
         }
       }
     }
     for (let i = this.playerMode; i < 3; i++) {
       const teamRow = document.getElementById(`idc-team${i}`);
       teamRow.style.display = 'none';
+    }
+    this.reloadStatDisplay();
+  }
+
+  reloadStatDisplay() {
+    const team = this.getActiveTeam();
+    const mp = this.isMultiplayer();
+    const awoke = this.effects.awakenings;
+    for (let i = 0; i < 6; i++) {
+      const iconEl = document.getElementById(`idc-stat-icon-${i}`);
+      const baseStatEl = document.getElementById(`idc-stat-base-${i}`);
+      // Handle no team member not present.
+      if (!team[i]) {
+        iconEl.innerText = '';
+        baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = '';
+        baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = '';
+        baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = '';
+        continue;
+      }
+      iconEl.innerText = team[i].id;
+      baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `HP: ${team[i].getHp(mp, awoke)}`;
+      baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = `ATK: ${team[i].getAtk(mp, awoke)}`;
+      baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `RCV: ${team[i].getRcv(mp, awoke)}`;
     }
   }
 
@@ -2362,7 +2405,7 @@ class Idc {
       option.style.display = 'none';
       options.style.fontSize = 'x-small';
       option.onmouseover = () => {
-        option.style.border = '1px solid white';
+        option.style.border = BORDER_COLOR;
       }
       option.onmouseleave = () => {
         option.style.border = '';
@@ -2428,7 +2471,7 @@ class Idc {
       option.style.display = 'none';
       options.style.fontSize = 'x-small';
       option.onmouseover = () => {
-        option.style.border = '1px solid white';
+        option.style.border = BORDER_COLOR;
       }
       option.onmouseleave = () => {
         option.style.border = '';
@@ -2715,55 +2758,10 @@ class Idc {
      * Latents: [ ] [ ] [ ] [ ] [ ] [ ]
      */
     const monsterEditor = document.createElement('div');
-
-    monsterEditor.appendChild(this.createMonsterSelector());
-    monsterEditor.appendChild(this.createInheritSelector());
-    monsterEditor.appendChild(this.createLevelEditor());
-    monsterEditor.appendChild(this.createPlusEditor());
-    monsterEditor.appendChild(this.createAwakeningEditor());
-
-    return monsterEditor;
-  }
-
-  createForm() {
-    // Remove the form if it doesn't already exist.
-    const existingForm = document.getElementById(Id.CONTAINER);
-    if (existingForm) {
-      existingForm.parentElement.removeChild(existingForm);
-    }
-
-    const form = document.createElement('div');
-    form.id = Id.CONTAINER
-
-    const layout = document.createElement('table');
-    layout.style.fontSize = 'small';
-    const layoutTopRow = document.createElement('tr');
-    const layoutLeft = document.createElement('td');
-    layoutLeft.style.paddingRight = '10px';
-    layoutLeft.style.verticalAlign = 'top';
-    const layoutMiddle = document.createElement('td');
-    layoutMiddle.id = 'team-builder';
-    layoutMiddle.style.verticalAlign = 'top';
-    const layoutRight = document.createElement('td');
-    layoutRight.verticalAlign = 'top';
-    layoutTopRow.appendChild(layoutLeft);
-    layoutTopRow.appendChild(layoutMiddle);
-    layoutTopRow.appendChild(layoutRight);
-    layout.appendChild(layoutTopRow);
-
-    const debugButton = document.createElement('button');
-    debugButton.innerText = 'DEBUG';
-    debugButton.onclick = () => {
-      const mp = this.isMultiplayer();
-      console.log(`Team HP: ${this.getHp()}`);
-      for (const monster of this.getActiveTeam()) {
-        console.log(monster.getCard().name);
-        console.log(`HP: ${monster.getHp(mp)} ATK: ${monster.getAtk(mp)} RCV: ${monster.getRcv(mp)}`);
-      }
-      console.log(this.getDamagePre());
-    }
-
-    layoutLeft.appendChild(debugButton);
+    monsterEditor.id = 'idc-monster-editor';
+    monsterEditor.style.padding = '5px';
+    monsterEditor.style.borderLeft = BORDER_COLOR;
+    monsterEditor.style.borderRight = BORDER_COLOR;
 
     // Player Mode controller.
     const playerModeRadio = document.createElement('div');
@@ -2787,9 +2785,100 @@ class Idc {
       modeLabel.innerText = `${i + 1}P`;
       playerModeRadio.appendChild(modeLabel)
     }
-    layoutLeft.appendChild(playerModeRadio);
-    layoutLeft.appendChild(this.createMonsterEditor());
-    layoutLeft.appendChild(this.saver.createElement(this));
+
+    monsterEditor.appendChild(playerModeRadio);
+    monsterEditor.appendChild(this.createMonsterSelector());
+    monsterEditor.appendChild(this.createInheritSelector());
+    monsterEditor.appendChild(this.createLevelEditor());
+    monsterEditor.appendChild(this.createPlusEditor());
+    monsterEditor.appendChild(this.createAwakeningEditor());
+    monsterEditor.appendChild(this.saver.createElement(this))
+
+    return monsterEditor;
+  }
+
+  chooseMonsterTab() {
+    const monsterTabChooser = document.getElementById('idc-tab-monster');
+    monsterTabChooser.style.borderBottom = '';
+    monsterTabChooser.style.cursor = '';
+    document.getElementById('idc-monster-editor').style.display = '';
+    const comboTabChooser = document.getElementById('idc-tab-combo');
+    comboTabChooser.style.borderBottom = BORDER_COLOR;
+    comboTabChooser.style.cursor = 'pointer';
+    document.getElementById('idc-combo-editor').style.display = 'none';
+  }
+
+  chooseComboTab() {
+    const comboTabChooser = document.getElementById('idc-tab-combo');
+    comboTabChooser.style.borderBottom = '';
+    comboTabChooser.style.cursor = '';
+    document.getElementById('idc-combo-editor').style.display = '';
+    const monsterTabChooser = document.getElementById('idc-tab-monster');
+    monsterTabChooser.style.borderBottom = BORDER_COLOR;
+    monsterTabChooser.style.cursor = 'pointer';
+    document.getElementById('idc-monster-editor').style.display = 'none';
+  }
+
+  createLayoutLeft() {
+    const layoutLeft = document.createElement('td');
+    layoutLeft.style.paddingRight = '10px';
+    layoutLeft.style.verticalAlign = 'top';
+
+    const debugButton = document.createElement('button');
+    debugButton.innerText = 'DEBUG';
+    debugButton.onclick = () => {
+      const mp = this.isMultiplayer();
+      console.log(`Team HP: ${this.getHp()}`);
+      for (const monster of this.getActiveTeam()) {
+        console.log(monster.getCard().name);
+        console.log(`HP: ${monster.getHp(mp)} ATK: ${monster.getAtk(mp)} RCV: ${monster.getRcv(mp)}`);
+      }
+      console.log(this.getDamagePre());
+    }
+
+    layoutLeft.appendChild(debugButton);
+
+    const monsterEditorElement = this.createMonsterEditor();
+    const comboElement = this.combos.createElement(this);
+    comboElement.style.display = 'none';
+
+    const tabChooser = document.createElement('table');
+    tabChooser.style.width = '100%';
+    const tabRow = document.createElement('tr');
+    const monsterTabChooser = document.createElement('td');
+    const comboTabChooser = document.createElement('td');
+    monsterTabChooser.id = 'idc-tab-monster';
+    monsterTabChooser.innerText = 'Monster Editor';
+    monsterTabChooser.style.padding = '5px';
+    monsterTabChooser.style.borderLeft = BORDER_COLOR;
+    monsterTabChooser.style.borderTop = BORDER_COLOR;
+    monsterTabChooser.style.borderRight = BORDER_COLOR;
+    monsterTabChooser.style.borderBottom = '';
+    monsterTabChooser.onclick = () => this.chooseMonsterTab();
+    tabRow.appendChild(monsterTabChooser);
+    comboTabChooser.id = 'idc-tab-combo';
+    comboTabChooser.innerText = 'Combo Editor';
+    comboTabChooser.style.cursor = 'pointer';
+    comboTabChooser.style.padding = '5px';
+    comboTabChooser.style.borderLeft = BORDER_COLOR;
+    comboTabChooser.style.borderTop = BORDER_COLOR;
+    comboTabChooser.style.borderRight = BORDER_COLOR;
+    comboTabChooser.style.borderBottom = BORDER_COLOR;
+    comboTabChooser.onclick = () => this.chooseComboTab();
+    tabRow.appendChild(comboTabChooser);
+    tabChooser.appendChild(tabRow);
+
+    layoutLeft.appendChild(tabChooser);
+    layoutLeft.appendChild(monsterEditorElement);
+    layoutLeft.appendChild(comboElement);
+
+    return layoutLeft;
+  }
+
+  createLayoutMiddle() {
+    const layoutMiddle = document.createElement('td');
+    layoutMiddle.style.verticalAlign = 'top';
+
     // TODO: update (latent) elements so that when updated, their heights also change.
     // const zoomEl = document.createElement('input');
     // zoomEl.type = 'number';
@@ -2800,6 +2889,14 @@ class Idc {
     //   this.reloadTeamIcons();
     // }
     // layoutMiddle.appendChild(zoomEl);
+    // Already loaded from injector.js.
+    const screenshotButton = document.getElementById('idc-screenshot-button');
+    screenshotButton.style.display = '';
+    layoutMiddle.appendChild(screenshotButton);
+
+    const teamBuilderEl = document.createElement('div');
+    teamBuilderEl.id = 'team-builder';
+
     const titleElement = document.createElement('input');
     titleElement.id = 'idc-team-title';
     titleElement.value = 'Team Name';
@@ -2808,8 +2905,8 @@ class Idc {
     titleElement.onkeyup = () => {
       this.title = titleElement.value;
     };
-    layoutMiddle.appendChild(titleElement);
-    layoutMiddle.appendChild(this.createTeamsForm());
+    teamBuilderEl.appendChild(titleElement);
+    teamBuilderEl.appendChild(this.createTeamsForm());
     const descriptionElement = document.createElement('textarea');
     descriptionElement.id = 'idc-team-description';
     descriptionElement.setAttribute('style',
@@ -2818,9 +2915,103 @@ class Idc {
     descriptionElement.onkeyup = () => {
       this.description = descriptionElement.value;
     };
-    layoutMiddle.appendChild(descriptionElement);
+    teamBuilderEl.appendChild(descriptionElement);
+    layoutMiddle.appendChild(teamBuilderEl);
 
-    layoutRight.appendChild(this.combos.createElement(this));
+    return layoutMiddle;
+  }
+
+  createLayoutRight() {
+    const layoutRight = document.createElement('td');
+    layoutRight.style.fontSize = 'small';
+    layoutRight.verticalAlign = 'top';
+
+    // 7 columns showing stats of the currently active team.
+    const statDisplayEl = document.createElement('table');
+    statDisplayEl.id = 'idc-stat-display';
+    statDisplayEl.style.fontSize = 'small';
+    const iconRow = document.createElement('tr');
+    for (let i = 0; i < 7; i++) {
+      const statIconContainer = document.createElement('td');
+      statIconContainer.id = `idc-stat-icon-${i}`;
+      if (i == 6) {
+        statIconContainer.innerText = 'Total';
+      }
+      iconRow.appendChild(statIconContainer);
+    }
+    statDisplayEl.appendChild(iconRow);
+    // Includes HP, ATK, RCV of the current team..
+    const baseStatRow = document.createElement('tr');
+    for (let i = 0; i < 7; i++) {
+      const statContainer = document.createElement('td');
+      statContainer.id = `idc-stat-base-${i}`;
+      const hpEl = document.createElement('div');
+      const atkEl = document.createElement('div');
+      const rcvEl = document.createElement('div');
+      hpEl.className = 'idc-stat-base-hp';
+      atkEl.className = 'idc-stat-base-atk';
+      rcvEl.className = 'idc-stat-base-rcv';
+      hpEl.innerText = 'HP: 0';
+      atkEl.innerText = 'ATK: 0';
+      rcvEl.innerText = 'RCV: 0';
+      statContainer.appendChild(hpEl)
+      statContainer.appendChild(atkEl);
+      statContainer.appendChild(rcvEl)
+
+      baseStatRow.appendChild(statContainer);
+    }
+    statDisplayEl.appendChild(baseStatRow);
+    const preDamageRow = document.createElement('tr');
+    for (let i = 0; i < 7; i++) {
+      const preDamageContainer = document.createElement('td');
+      preDamageContainer.id = `idc-stat-damage-pre-${i}`;
+      if (i < 6) {
+        const mainAttr = document.createElement('div');
+        mainAttr.innerText = '0';
+        preDamageContainer.appendChild(mainAttr)
+        const subAttr = document.createElement('div');
+        subAttr.innerText = '0';
+        preDamageContainer.appendChild(subAttr);
+      } else {
+        // TODO: Total value.
+      }
+      preDamageRow.appendChild(preDamageContainer);
+    }
+    statDisplayEl.appendChild(preDamageRow);
+    // SB
+    // OEs + Rows
+    // Hazards (Poison, jammer, blind, SBR)
+    // Special Hazards (clouds, immobility)
+    // True Damage (Bonus Attack, GB)
+    // Team HP/RCV
+    // Attribute Resists
+    // const aggregatedAwakeningsRow = document.createElement('tr');
+    // Determines total time to move.
+    // const timeRow = document.createElement('tr');
+    // Autoheal
+    layoutRight.appendChild(statDisplayEl);
+
+    return layoutRight;
+  }
+
+  createForm() {
+    // Remove the form if it doesn't already exist.
+    const existingForm = document.getElementById(Id.CONTAINER);
+    if (existingForm) {
+      existingForm.parentElement.removeChild(existingForm);
+    }
+
+    const form = document.createElement('div');
+    form.id = Id.CONTAINER
+
+    const layout = document.createElement('table');
+    layout.style.fontSize = 'small';
+    const layoutTopRow = document.createElement('tr');
+    layoutTopRow.appendChild(this.createLayoutLeft());
+    layoutTopRow.appendChild(this.createLayoutMiddle());
+    layoutTopRow.appendChild(this.createLayoutRight());
+    layout.appendChild(layoutTopRow);
+
 
     form.appendChild(layout);
 
@@ -2837,27 +3028,31 @@ class Idc {
 }
 
 function timeout(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return ;
 }
 
-async function awaitLoaded() {
-  while (vm.page() == KoPage.LOADING) {
-    await timeout(200);
+async function awaitLoaded(conditionFn, waitMs = 50) {
+  while (!conditionFn()) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 }
 
 async function initIdc() {
-  if (window.location.hash != '#/CARD/0') {
+  if (window.location.hash != '#/ShowMeTheRopes') {
+    for (const element of document.getElementsByClassName('main-site-div')) {
+      element.style.display = '';
+      element.parentElement.removeChild(element);
+    }
     return;
   }
-  await awaitLoaded();
+  await awaitLoaded(() => vm.page() != KoPage.LOADING);
+  // Clear Ilmina.
+  for (const element of document.getElementsByClassName('main-site-div')) {
+    element.style.display = 'none';
+  }
   annotateMonsterScaling();
   loadMonsterSearches();
 
-  // Clear Ilmina.
-  for (const element of document.getElementsByClassName('main-site-div')) {
-    element.parentElement.removeChild(element);
-  }
   const idc = new Idc();
   idc.createForm();
   console.log(idc);

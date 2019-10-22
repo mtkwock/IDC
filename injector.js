@@ -9,9 +9,11 @@ function loadScript(script) {
 }
 
 const screenShotter = document.createElement('button');
+screenShotter.id = 'idc-screenshot-button';
+screenShotter.style.display = 'none';
 screenShotter.innerText = 'Screenshot!';
 screenShotter.onclick = () => {
-  console.log('We are clicked');
+  // console.log('We are clicked');
   const teamBuilder = document.getElementById('team-builder');
   const rect = teamBuilder.getBoundingClientRect();
   chrome.runtime.sendMessage({

@@ -5,17 +5,15 @@
   "manifest_version": 2,
   "permissions": ["activeTab", "tabs", "<all_urls>"],
   "background": {
-    "scripts": ["screenshotter.js"]
+    "scripts": ["background.js"]
   },
   "content_scripts": [
     {
       "matches": [
-        "*://ilmina.com/*",
-        "http://*/*/*/0"
+        "*://ilmina.com/*"
       ],
       "run_at": "document_idle",
       "js": [
-        // "tsc.js",
         "injector.js"
       ]
     }
