@@ -877,6 +877,7 @@ const LEADER_SKILL_GENERATORS = {
   155: statBoostFromMultiplayer,
   159: atkScalingFromLinkedOrbs,
   162: bigBoardLeader,
+  163: noSkyfallAndBaseStatFromAttributeType,
   167: atkRcvScalingFromLinkedOrbs,
   169: atkAndShieldFromMinCombos,
   170: atkAndShieldFromMinColorMatch,

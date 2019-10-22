@@ -3022,10 +3022,7 @@ class Idc {
     hpPercentInput.value = this.hpPercent;
     hpPercentInput.onkeyup = () => {
       let hpPercent = hpPercentInput.value;
-      if (!hpPercent) {
-        hpPercent = 100;
-      }
-      if (hpPercent <= 0) {
+      if (!hpPercent || hpPercent <= 0) {
         hpPercent = 1;
       }
       if (hpPercent > 100) {
