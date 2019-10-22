@@ -25,7 +25,7 @@ const baseLeaderSkill = Object.freeze({
     return 1;
   },
   // Recovery multiplier applied to monsters before comboing.
-  rcv: (monster, team, percentHp, skillUsed, isMultiplayer) => {
+  rcv: (monster, team, isMultiplayer) => {
     return 1;
   },
   // Recovery multiplier as a result of matching combos.
@@ -321,7 +321,7 @@ function atkScalingFromLinkedOrbs(params) {
 function atkRcvFromSubHp(params) {
   let [maxThreshPercent, attrBits, typeBits, atk100, rcv100] = params;
   rcv100 = rcv100 || 100;
-  const {atk, rcv} = baseStatFromAttributeType(attrBits, typeBits, 0, atk100, rcv100);
+  const {atk, rcvPost} = baseStatFromAttributeType(attrBits, typeBits, 0, atk100, rcv100);
 
   return createLeaderSkill({
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
@@ -330,11 +330,11 @@ function atkRcvFromSubHp(params) {
       }
       return atk(ping, team, percentHp, comboContainer, skillUsed, isMultiplayer);
     },
-    rcv: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+    rcvPost: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       if (percentHp > maxThreshPercent) {
         return 1;
       }
-      return rcv(monster, team, percentHp, comboContainer, skillUsed, isMultiplayer);
+      return rcvPost(monster, team, percentHp, comboContainer, skillUsed, isMultiplayer);
     },
   });
 }
@@ -375,7 +375,7 @@ function baseStatFromAttributeType(params) {
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       return monsterMatchesAttributeOrType(ping.source) ? atkMult : 1;
     },
-    rcv: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+    rcv: (monster, team, isMultiplayer) => {
       return monsterMatchesAttributeOrType(monster) ? rcvMult : 1;
     },
     damageMult: (enemy) => {
@@ -397,7 +397,7 @@ function atkRcvColorShieldFromSubHp(params) {
     shield100 = remaining[1];
   }
 
-  const {atk, rcv, damageMult} = baseStatFromAttributeType(
+  const {atk, rcvPost, damageMult} = baseStatFromAttributeType(
       [attrBits, typeBits, 100, atk100, rcv100, colorsResistedBits, shield100]);
 
   return createLeaderSkill({
@@ -407,11 +407,11 @@ function atkRcvColorShieldFromSubHp(params) {
       }
       return atk(ping, team, percentHp, comboContainer, skillUsed, isMultiplayer);
     },
-    rcv: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+    rcvPost: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       if (percentHp > maxThreshPercent) {
         return 1;
       }
-      return rcv(ping, team, percentHp, comboContainer, skillUsed, isMultiplayer);
+      return rcvPost(ping, team, percentHp, comboContainer, skillUsed, isMultiplayer);
     },
     damageMult: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       if (percentHp > maxThreshPercent) {
@@ -458,7 +458,7 @@ function stackingStatboostsForAttributes(params) {
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       return getMultiplier(ping.source, atkA, atkB);
     },
-    rcv: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+    rcv: (monster, team, isMultiplayer) => {
       return getMultiplier(monster, rcvA, rcvB);
     },
   })

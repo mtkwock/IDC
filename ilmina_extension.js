@@ -1119,6 +1119,7 @@ class ComboContainer {
     this.boardWidth = 6;
     this.maxVisibleCombos = 14;
     this.bonusCombos = 0;
+    this.onUpdate = [];
   }
 
   comboCount() {
@@ -1295,6 +1296,9 @@ class ComboContainer {
           enhancedEl.value = String(combo.enhanced);
         }
       }
+    }
+    for (const update of this.onUpdate) {
+      update();
     }
   }
 
@@ -1784,6 +1788,7 @@ class Idc {
     this.boardWidth = 6;
 
     this.combos = new ComboContainer();
+    this.combos.onUpdate.push(() => this.reloadStatDisplay());
 
     this.monsterEditingIndex = 0;
 
@@ -1898,6 +1903,26 @@ class Idc {
     return Math.round(totalHp * (1 + 0.05 * teamHpAwakenings));
   }
 
+  getRcv() {
+    const monsters = this.getActiveTeam();
+    const lead = getLeaderSkillEffects(monsters[0].getCard().leaderSkillId).rcv;
+    const helper = getLeaderSkillEffects(monsters[5].getCard().leaderSkillId).rcv;
+    let totalRcv = 0;
+    let teamRcvAwakenings = 0;
+    for (const monster of monsters) {
+      if (!monster.id || monster.id <= 0) {
+        continue;
+      }
+      const rcvMult = (
+          lead(monster, monsters, this.isMultiplayer()) * 
+          helper(monster, monsters, this.isMultiplayer()));
+      const rcvBase = monster.getRcv(this.isMultiplayer(), this.effects.awakenings);
+      totalRcv += Math.round(rcvBase * rcvMult);
+      teamRcvAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set([IdcAwakening.TEAM_RCV])).length;
+    }
+
+    return Math.round(totalRcv * (1 + 0.1 * teamRcvAwakenings));  }
+
   // Get all pings. Does not include
   getDamagePre() {
     let monsters = this.getActiveTeam();
@@ -1986,8 +2011,8 @@ class Idc {
         let baseMultiplier = (combo.count + 1) * 0.25;
         // Handle enhances.
         if (combo.enhanced) {
-          baseMultiplier *= (1 + 0.03 * combo.enhanced);
-          baseMultiplier *= (1 + enhancedCounts[c] * 0.075);
+          baseMultiplier *= (1 + 0.06 * combo.enhanced);
+          baseMultiplier *= (1 + enhancedCounts[c] * 0.07);
         }
         // Handle Row
         if (combo.shape == Shape.ROW) {
@@ -2027,6 +2052,8 @@ class Idc {
     }
 
     pings = pings.filter((ping) => ping.amount > 0);
+    console.log('Initial combos');
+    console.log(pings);
 
     // Sum healing combos.
     // TODO: Handle bonus attacks separately.
@@ -2040,8 +2067,8 @@ class Idc {
     for (const combo of this.combos.combos['h']) {
       let multiplier = (combo.count + 1) * 0.25;
       if (combo.enhanced) {
-        multiplier *= (1 + 0.03 * combo.enhanced);
-        multiplier *= (1 + enhancedCounts.h * 0.075);
+        multiplier *= (1 + 0.06 * combo.enhanced);
+        multiplier *= (1 + enhancedCounts.h * 0.07);
       }
       for (const monster of monsters) {
         let rcv = monster.getRcv();
@@ -2070,7 +2097,7 @@ class Idc {
     const comboMultiplier = this.combos.comboCount() * 0.25 + 0.75;
 
     for (const ping of pings) {
-      ping.multiply(comboMultiplier);
+      ping.multiply(comboMultiplier, Round.UP);
     }
     healing = Math.ceil(healing * comboMultiplier);
 
@@ -2372,9 +2399,17 @@ class Idc {
     const team = this.getActiveTeam();
     const mp = this.isMultiplayer();
     const awoke = this.effects.awakenings;
+    const {pings, bonusAttacks, healing, trueBonusAttacks} = this.getDamagePre();
+    for (const el of document.getElementsByClassName('idc-stat-damage-pre-main')) {
+      el.innerText = '';
+    }
+    for (const el of document.getElementsByClassName('idc-stat-damage-pre-sub')) {
+      el.innerText = '';
+    }
     for (let i = 0; i < 6; i++) {
       const iconEl = document.getElementById(`idc-stat-icon-${i}`);
       const baseStatEl = document.getElementById(`idc-stat-base-${i}`);
+      const damageEl = document.getElementById(`idc-stat-damage-pre-${i}`);
       // Handle no team member not present.
       if (!team[i]) {
         iconEl.innerText = '';
@@ -2387,7 +2422,16 @@ class Idc {
       baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `HP: ${team[i].getHp(mp, awoke)}`;
       baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = `ATK: ${team[i].getAtk(mp, awoke)}`;
       baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `RCV: ${team[i].getRcv(mp, awoke)}`;
+      for (const ping of pings.filter((ping) => ping.source == team[i])) {
+        const classToFind = ping.isSub ? 'idc-stat-damage-pre-sub' : 'idc-stat-damage-pre-main';
+        const damagePreEl = damageEl.getElementsByClassName(classToFind)[0];
+        damagePreEl.innerText = `${ping.amount}`;
+      }
     }
+
+    const totalBaseStatEl = document.getElementById('idc-stat-base-6');
+    totalBaseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `HP: ${this.getHp()}`;
+    totalBaseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `RCV: ${this.getRcv()}`;
   }
 
   createMonsterSelector() {
@@ -2952,7 +2996,9 @@ class Idc {
       atkEl.className = 'idc-stat-base-atk';
       rcvEl.className = 'idc-stat-base-rcv';
       hpEl.innerText = 'HP: 0';
-      atkEl.innerText = 'ATK: 0';
+      if (i != 6) {
+        atkEl.innerText = 'ATK: 0';
+      }
       rcvEl.innerText = 'RCV: 0';
       statContainer.appendChild(hpEl)
       statContainer.appendChild(atkEl);
@@ -2967,9 +3013,11 @@ class Idc {
       preDamageContainer.id = `idc-stat-damage-pre-${i}`;
       if (i < 6) {
         const mainAttr = document.createElement('div');
+        mainAttr.className = 'idc-stat-damage-pre-main';
         mainAttr.innerText = '0';
         preDamageContainer.appendChild(mainAttr)
         const subAttr = document.createElement('div');
+        subAttr.className = 'idc-stat-damage-pre-sub';
         subAttr.innerText = '0';
         preDamageContainer.appendChild(subAttr);
       } else {
