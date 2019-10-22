@@ -2100,11 +2100,11 @@ class Idc {
     // 7c + 10c
     for (const ping of pings) {
       const count = this.combos.comboCount();
-      multiplier = 1;
+      let multiplier = 1;
       if (count >= 7) {
         multiplier *= 2 ** ping.source.countAwakening(IdcAwakening.COMBO_7);
         if (count >- 10) {
-          multiplier *= 5 ** ping.source.countAwakenings(IdcAwakening.COMBO_10);
+          multiplier *= 5 ** ping.source.countAwakening(IdcAwakening.COMBO_10);
         }
       }
       ping.multiply(multiplier);
@@ -2113,12 +2113,12 @@ class Idc {
     // <=50%, >=80%
     for (const ping of pings) {
       const percent = this.getHpPercent();
-      multiplier = 1;
+      let multiplier = 1;
       if (percent <= 50) {
-        multiplier *= 2 ** ping.source.countAwakenings(IdcAwakening.HP_LESSER);
+        multiplier *= 2 ** ping.source.countAwakening(IdcAwakening.HP_LESSER);
       }
       if (percent >= 80) {
-        multiplier *= 1.5 ** ping.source.countAwakenings(IdcAwakening.HP_GREATER);
+        multiplier *= 1.5 ** ping.source.countAwakening(IdcAwakening.HP_GREATER);
       }
       ping.multiply(multiplier, Round.NEAREST);
     }
@@ -2133,31 +2133,32 @@ class Idc {
     // SFua
     if (this.combos.combos['h'].some((combo) => combo.shape == Shape.BOX)) {
       for (const ping of pings) {
-        ping.multiply(2 ** ping.source.countAwakenings(IdcAwakening.BONUS_ATTACK_SUPER));
+        ping.multiply(2 ** ping.source.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER));
       }
     }
 
     // L-Guard
     if (this.combos.combos['h'].some((combo) => combo.shape == Shape.L)) {
       for (const ping of pings) {
-        ping.multiply(1.5 ** ping.source.countAwakenings(IdcAwakening.L_GUARD), Round.NEAREST);
+        ping.multiply(1.5 ** ping.source.countAwakening(IdcAwakening.L_GUARD), Round.NEAREST);
       }
     }
 
     // Jammer-Blessing, Poison-Blessing
     if (this.combos.combos['j'].length) {
       for (const ping of pings) {
-        ping.multiply(1.5 ** ping.source.countAwakenings(IdcAwakening.JAMMER_BOOST), Round.NEAREST);
+        ping.multiply(1.5 ** ping.source.countAwakening(IdcAwakening.JAMMER_BOOST), Round.NEAREST);
       }
     }
 
     // Poison-Blessing
     if (this.combos.combos['p'].length || this.combos.combos['m'].length) {
       for (const ping of pings) {
-        ping.multiply(2 ** ping.source.countAwakenings(IdcAwakening.POISON_BOOST));
+        ping.multiply(2 ** ping.source.countAwakening(IdcAwakening.POISON_BOOST));
       }
     }
 
+    const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.skillUsed, MP);
     // Apply leader skills.
     for (const ping of pings) {
       const multiplier = partialLead(lead, ping) * partialLead(helper, ping);
