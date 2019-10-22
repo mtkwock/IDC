@@ -1976,45 +1976,7 @@ class Idc {
         4: countAwakenings(IdcAwakening.ROW_DARK),
         5: countAwakenings(IdcAwakening.RECOVER_BIND),
     }
-    // TODO: split this into parts and ordered because these apply separately and round separately.
-    // >80% applies and rounds before rows.
-    // Known order:
-    // 80%/50%, Rows
-    // Unknown order
-    //  * 50% [Always independent of 80%, likely happens at the same time]
-    //  * Combo 7, Combo 10 [Probably happen at same time, unknown when.]
-    //  * SFua
-    const awakeningLeaderSkill = {
-      atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-        let multiplier = 1;
-        const comboCount = comboContainer.comboCount();
-        // Handle Rows.
-        if (rowCounts[ping.attribute]) {
-          multiplier *= 1 + 0.15 * rowCounts[ping.attribute];
-        }
-        // Handle 7c.
-        if (comboCount >= 7) {
-          multiplier *= (2 ** ping.source.countAwakening(IdcAwakening.COMBO_7, MP));
-          if (comboCount >= 10) {
-            // Handle 10c.
-            multiplier *= (5 ** ping.source.countAwakening(IdcAwakening.COMBO_10, MP));
-          }
-        }
-        // Handle >80%.
-        if (percentHp >= 80) {
-          multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.HP_GREATER, MP));
-        }
-        // Handle <=50%.
-        if (percentHp <= 50) {
-          multiplier *= (2 ** ping.source.countAwakening(IdcAwakening.HP_LESSER, MP));
-        }
-        // Handle Super Bonus Attack.
-        if (comboContainer.combos['h'].some((combo) => combo.shape == Shape.BOX)) {
-          multiplier *= 2;
-        }
-        return multiplier;
-      },
-    };
+
     // Row Leader skill?
     // 7c Leader skill?
     monsters = monsters.filter((monster) => monster.id && monster.id >= 0);
@@ -2128,9 +2090,72 @@ class Idc {
     // Apply awakenings.
     // For some reason, this is a Round.NEAREST for rows.
     // This may need to be split out if other things like SFua cause it to behave differently.
-    const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.skillUsed, MP);
+    // Known order:
+    // (7c/10c), (80%/50%), Rows, Sfua, L-Guard
+    // Poison Blessing occurs after rows.  Unknown relative to L-Guard as it's impossible to get both.
+    // Jammer applies after Sfua
+    // Assuming:
+    // (7c/10c), (80%/50%), Rows, Sfua, L-Guard, JammerBless, PoisonBless
+
+    // 7c + 10c
     for (const ping of pings) {
-      ping.multiply(partialLead(awakeningLeaderSkill, ping), Round.NEAREST);
+      const count = this.combos.comboCount();
+      multiplier = 1;
+      if (count >= 7) {
+        multiplier *= 2 ** ping.source.countAwakening(IdcAwakening.COMBO_7);
+        if (count >- 10) {
+          multiplier *= 5 ** ping.source.countAwakenings(IdcAwakening.COMBO_10);
+        }
+      }
+      ping.multiply(multiplier);
+    }
+
+    // <=50%, >=80%
+    for (const ping of pings) {
+      const percent = this.getHpPercent();
+      multiplier = 1;
+      if (percent <= 50) {
+        multiplier *= 2 ** ping.source.countAwakenings(IdcAwakening.HP_LESSER);
+      }
+      if (percent >= 80) {
+        multiplier *= 1.5 ** ping.source.countAwakenings(IdcAwakening.HP_GREATER);
+      }
+      ping.multiply(multiplier, Round.NEAREST);
+    }
+
+    // Rows
+    for (const ping of pings) {
+      if (rowCounts[ping.attribute]) {
+        ping.multiply(1 + 0.15 * rowCounts[ping.attribute], Round.NEAREST);
+      }
+    }
+
+    // SFua
+    if (this.combos.combos['h'].some((combo) => combo.shape == Shape.BOX)) {
+      for (const ping of pings) {
+        ping.multiply(2 ** ping.source.countAwakenings(IdcAwakening.BONUS_ATTACK_SUPER));
+      }
+    }
+
+    // L-Guard
+    if (this.combos.combos['h'].some((combo) => combo.shape == Shape.L)) {
+      for (const ping of pings) {
+        ping.multiply(1.5 ** ping.source.countAwakenings(IdcAwakening.L_GUARD), Round.NEAREST);
+      }
+    }
+
+    // Jammer-Blessing, Poison-Blessing
+    if (this.combos.combos['j'].length) {
+      for (const ping of pings) {
+        ping.multiply(1.5 ** ping.source.countAwakenings(IdcAwakening.JAMMER_BOOST), Round.NEAREST);
+      }
+    }
+
+    // Poison-Blessing
+    if (this.combos.combos['p'].length || this.combos.combos['m'].length) {
+      for (const ping of pings) {
+        ping.multiply(2 ** ping.source.countAwakenings(IdcAwakening.POISON_BOOST));
+      }
     }
 
     // Apply leader skills.
