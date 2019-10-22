@@ -426,7 +426,7 @@ class MonsterInstance {
 
   isSuperAwakeningActive(isMultiplayer) {
     return (!isMultiplayer && this.level > 99 &&
-      this.hpPlus == 99 && this.atkPlus == 99 && this.rcvPlus > 99);
+      this.hpPlus == 99 && this.atkPlus == 99 && this.rcvPlus == 99);
   }
 
   /**
@@ -1864,7 +1864,7 @@ class Idc {
   }
 
   isMultiplayer() {
-    return this.playerMode != 2;
+    return this.playerMode != 1;
   }
 
   getHp() {
@@ -1921,7 +1921,8 @@ class Idc {
       teamRcvAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set([IdcAwakening.TEAM_RCV])).length;
     }
 
-    return Math.round(totalRcv * (1 + 0.1 * teamRcvAwakenings));  }
+    return Math.round(totalRcv * (1 + 0.1 * teamRcvAwakenings));
+  }
 
   // Get all pings. Does not include
   getDamagePre() {
@@ -3089,7 +3090,6 @@ async function initIdc() {
   if (window.location.hash != '#/ShowMeTheRopes') {
     for (const element of document.getElementsByClassName('main-site-div')) {
       element.style.display = '';
-      element.parentElement.removeChild(element);
     }
     return;
   }

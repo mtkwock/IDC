@@ -81,7 +81,7 @@ function createLeaderSkill(configs) {
 function idxsFromBits(bits) {
   const idxs = [];
   for (let idx = 0; bits >> idx; idx++) {
-    if (bits >> idx && 1) {
+    if (bits >> idx & 1) {
       idxs.push(idx);
     }
   }
