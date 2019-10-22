@@ -3,7 +3,10 @@
   "version": "0.1",
   "description": "Hijack Ilmina's library for training purposes.",
   "manifest_version": 2,
-  "permissions": ["activeTab"],
+  "permissions": ["activeTab", "tabs", "<all_urls>"],
+  "background": {
+    "scripts": ["screenshotter.js"]
+  },
   "content_scripts": [
     {
       "matches": [

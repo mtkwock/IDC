@@ -8,5 +8,21 @@ function loadScript(script) {
   (document.head || document.documentElement).appendChild(s);  
 }
 
+const screenShotter = document.createElement('button');
+screenShotter.innerText = 'Screenshot!';
+screenShotter.onclick = () => {
+  console.log('We are clicked');
+  const teamBuilder = document.getElementById('team-builder');
+  const rect = teamBuilder.getBoundingClientRect();
+  chrome.runtime.sendMessage({
+    width: rect.width,
+    height: rect.height,
+    offsetX: -1 * rect.left,
+    offsetY: -1 * rect.top,
+    windowHeight: window.innerHeight,
+    windowWidth: window.innerWidth,
+  }, (response) => {});
+}
+document.body.appendChild(screenShotter);
 loadScript('leaders.js');
 loadScript('ilmina_extension.js');

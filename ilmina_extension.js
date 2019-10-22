@@ -2742,6 +2742,7 @@ class Idc {
     layoutLeft.style.paddingRight = '10px';
     layoutLeft.style.verticalAlign = 'top';
     const layoutMiddle = document.createElement('td');
+    layoutMiddle.id = 'team-builder';
     layoutMiddle.style.verticalAlign = 'top';
     const layoutRight = document.createElement('td');
     layoutRight.verticalAlign = 'top';
