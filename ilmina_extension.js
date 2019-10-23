@@ -974,6 +974,260 @@ function testRoche() {
   }
 }
 
+const EnemySkillEffect = {
+  NONE: null,
+  MULTI_HIT: 'multi-hit', // #hits
+  GRAVITY: 'gravity', // %Gravity
+  STATUS_SHIELD: 'status', // config unused.
+  DAMAGE_SHIELD: 'shield', // %shield (e.g. 50, 75)
+  SELF_HEAL: 'enemy-heal', // %heal (e.g. 10, 50, 100)
+  PLAYER_HEAL: 'player-heal', // %heal
+  DAMAGE_ABSORB: 'damage', // Minimum value absorbed.
+  ATTRIBUTE_ABSORB: 'attribute', // Flags, 1: Fire, 2: Water, 4: Wood, 8: Light, 16: Dark
+  COMBO_ABSORB: 'combo', // Max combos of the absorb.
+  ENRAGE: 'enrage', // %Damage (e.g. 150, 200, 1000)
+  DAMAGE_VOID: 'void', // Min damage voided
+  CLEAR_BUFFS: 'clear', // config unused.
+  RCV_BUFF: 'rcv', // Percent RCV (e.g. 0, 25, 50, 300)
+  TIME_BUFF_FLAT: 'time-flat', // Time delta (e.g. -5, -2, +1, +5)
+  TIME_BUFF_SCALE: 'time-scale', // Time multiplier (e.g. 0.25, 0.5, 3)
+  // Not supporting.
+  ORB_CHANGE: 'orb-change',
+  BLIND: 'blind', // Unused config.
+  STICKY_BLIND: 'sticky-blind', // Config is [positions], turns
+};
+
+class EnemySkill {
+  constructor() {
+    this.name = '';
+    this.description = '';
+    // Percentage.  After applying gravity, HP is rounded up.
+    this.effect = EnemySkillEffect.NONE;
+    this.config = 0;
+    this.damagePercent = 0;  // If 0, no attack.
+  }
+
+  apply(idc, source) {
+    console.warn('Enemy Skills not handled yet');
+    switch(this.effect) {
+      case EnemySkillEffect.MULTI_HIT:
+      break;
+      case EnemySkillEffect.GRAVITY:
+      break;
+      case EnemySkillEffect.STATUS_SHIELD:
+      break;
+      case EnemySkillEffect.DAMAGE_SHIELD:
+      break;
+      case EnemySkillEffect.SELF_HEAL:
+      break;
+      case EnemySkillEffect.PLAYER_HEAL:
+      break;
+      case EnemySkillEffect.DAMAGE_ABSORB:
+      break;
+      case EnemySkillEffect.ATTRIBUTE_ABSORB:
+      break;
+      case EnemySkillEffect.ENRAGE:
+      break;
+      case EnemySkillEffect.DAMAGE_VOID:
+      break;
+      case EnemySkillEffect.CLEAR_BUFFS:
+      break;
+      case EnemySkillEffect.RCV_BUFF:
+      break;
+      case EnemySkillEffect.TIME_BUFF_FLAT:
+      break;
+      case EnemySkillEffect.TIME_BUFF_SCALE:
+      break;
+      case EnemySkillEffect.NONE:
+      break;
+      default:
+        console.warn('Unhandled type: ' + this.effect);
+    }
+  }
+
+  toJson() {
+    return {
+      name: this.name,
+      description: this.description,
+      effect: this.effect,
+      config: this.effectConfig,
+      damagePercent: this.damagePercent,
+    };
+  }
+}
+
+EnemySkill.fromJson = (json) => {
+  const skill = new EnemySkill();
+  skill.name = json.name;
+  skill.description = json.description;
+  skill.damagePercent = json.damagePercent;
+  skill.effect = json.effect;
+  skill.config = json.config;
+  return effect;
+}
+
+class EnemySkillset {
+  constructor() {
+    /**
+     * @type {!Array<EnemySkillEffect>}
+     */
+    this.skills = [];
+  }
+
+  applySkillset(idc, source) {
+    console.warn('Enemy skillset application not supported yet.');
+    for (const skill of this.skills) {
+      skill.apply(idc, source);
+    }
+  }
+
+  toJson() {
+    return {
+      skills: this.skills.map((skill) => skill.toJson()),
+    };
+  }
+}
+
+EnemySkillset.fromJson = (json) => {
+  const skillset = new EnemySkillset();
+  skillset.skills = json.skills.map((skillJson) => EnemySkill.fromJson(skillJson));
+  return skillset;
+}
+
+class EnemyInstance {
+  constructor(idc) {
+    this.idc = idc;
+    this.id = -1;
+
+    // Passives that are always applied
+    this.maxHp = 1;
+    this.attack = 1;
+    this.defense = 0;
+    this.resolvePercent = 0;
+    this.attributesResisted = [];
+    this.typesResisted = [];
+    this.preemptiveSkillset = null; // Used when loading the monster.
+    this.skillsets = [];
+    this.turnCounter = 1; // Not to be used yet.
+
+    // Values that can change during battle.
+    this.currentHp = 1;
+    this.currentAttribute = -1;
+    this.statusShield = false;
+    this.shieldPercent = 0; // Damage is multiplied by (100 - shieldPercent) / 100
+    this.attributeAbsorb = []; // Each attribute absorbed.
+    this.comboAbsorb = -1;
+    this.damageAbsorb = -1;
+    this.damageVoid = -1;
+    this.attackMultiplier = 1; // Enrage
+    this.turnsRemaining = 1; // Not to be used yet.
+    this.turnCounterOverride = -1; // Not to be used yet.
+
+    // Values that can be set by players.
+    this.ignoreAttributeAbsorb = false;
+    this.ignoreDamageAbsorb = false;
+    this.ignoreVoid = false;
+    this.ignoreDefensePercent = 0;
+    this.poison = 0;
+    this.delayed = false; // Not to be used yet.
+  }
+
+  reset() {
+    this.currentHp = this.maxHp;
+    this.currentAttribute = -1;
+    this.statusShield = false;
+    this.shieldPercent = 0;
+    this.attributeAbsorb.length = 0;
+    this.comboAbsorb = -1;
+    this.damageAbsorb = -1;
+    this.damageVoid = -1;
+    this.attackMultiplier = 1;
+    this.turnsRemaining = this.turnCounter;
+    this.turnCounterOverride = -1;
+    this.ignoreAttributeAbsorb = false;
+    this.ignoreDamageAbsorb = false;
+    this.ignoreVoid = false;
+    this.ignoreDefensePercent = 0;
+    this.poison = 0;
+    this.delayed = false;
+    if (this.preemptiveSkillset) {
+      this.preemptiveSkillset.applySkillset();
+    }
+  }
+
+  toJson() {
+    return {
+      id: this.id,
+      maxHp: this.maxHp,
+      defense: this.defense,
+      resolvePercent: this.resolvePercent,
+      attributesResisted: [...this.attributesResisted],
+      typesResisted: [...this.typesResisted],
+      preemptiveSkillset: this.preemptiveSkillset ? this.preemptiveSkillset.toJson() : null,
+      skillsets: this.skillsets.map((skillset) => skillset.toJson()),
+      turnCounter: this.turnCounter,
+    };
+  }
+}
+
+EnemyInstance.fromJson = (json) =>{
+  const instance = new EnemyInstance();
+  instance.id = json.id;
+  instance.maxHp = json.maxHp;
+  instance.defense = json.defense;
+  instance.resolvePercent = json.resolvePercent;
+  instance.attributesResisted = json.attributesResisted;
+  instance.typesResisted = json.typesResisted;
+  instance.preemptiveSkillset = json.preemptiveSkillset ?
+      EnemySkillset.fromJson(json.preemptiveSkillset) : null;
+  instance.skillsets = json.skillsets.map(
+      (skillsetJson) => EnemySkillset.fromJson(skillsetJson));
+  instance.turnCounter = json.turnCount;
+  return instance;
+};
+
+
+class DungeonFloor {
+  constructor() {
+    this.enemies = [];
+  }
+
+  toJson() {
+    return {
+      enemies: this.enemies.map((enemy) => enemy.toJson()),
+    };
+  }
+}
+
+DungeonFloor.fromJson = (json) => {
+  const floor = new DungeonFloor();
+  floor.enemies = json.enemies.map((enemy) => EnemyInstance.fromJson(enemy));
+  return floor;
+}
+
+class DungeonInstance {
+  constructor() {
+    this.name = '';
+    this.floors = [];
+  }
+
+  toJson() {
+    return {
+      name: this.name,
+      floors: this.floors.map((floor) => floor.toJson()),
+    };
+  }
+
+  loadJson(json) {
+    this.name = json.name;
+    this.floors = json.floors.map((floor) => DungeonFloor.fromJson(floor));
+  }
+
+  save() {
+    window.localStorage.idcStoredDungeons
+  }
+}
+
 
 function getAwakeningOffsets(awakeningNumber) {
   const result = [0, -324];
@@ -1667,9 +1921,14 @@ const Round = {
 
 class StoredTeams {
   constructor() {
+    this.mode = 'teams';
     this.teams = {};
+    this.dungeons = {};
     if (window.localStorage.idcStoredTeams) {
       this.teams = JSON.parse(window.localStorage.idcStoredTeams);
+    }
+    if (window.localStorage.idcStoredDungeons) {
+      this.dungeons = JSON.parse(window.localStorage.idcStoredDungeons);
     }
   }
 
@@ -1693,6 +1952,22 @@ class StoredTeams {
     for (const teamName in this.teams) {
       console.log(`${teamName}: ${this.teams[teamName].title}`);
     }
+  }
+
+  loadDungeon(name) {
+    if (name in this.dungeons) {
+      return this.dungeons[name];
+    }
+  }
+
+  saveDungeon(dungeonJson) {
+    this.dungeons[dungeonJson.name] = dungeonJson;
+    window.localStorage.idcStoredDungeons = JSON.stringify(this.dungeons);
+  }
+
+  deleteDungeon(name) {
+    delete this.dungeons[name];
+    window.localStorage.idcStoredDungeons = JSON.stringify(this.dungeons);
   }
 
   reload(idc) {
@@ -2038,8 +2313,6 @@ class Idc {
     }
 
     pings = pings.filter((ping) => ping.amount > 0);
-    console.log('Initial combos');
-    console.log(pings);
 
     // Sum healing combos.
     // TODO: Handle bonus attacks separately.
@@ -2063,10 +2336,10 @@ class Idc {
         }
         if (combo.shape == Shape.COLUMN &&
             monster.countAwakening(IdcAwakening.BONUS_ATTACK, MP)) {
-          bonusAttacks[0] += 1;
+          trueBonusAttacks[0] += 1;
         }
         if (combo.shape == Shape.BOX) {
-          bonusAttacks[0] += (99 * monster.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER, MP));
+          trueBonusAttacks[0] += (99 * monster.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER, MP));
         }
         const rcvMult = (
             partialRcv(lead, monster) *

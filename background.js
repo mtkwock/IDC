@@ -35,8 +35,6 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       link.click();
     };
     img.src = dataUri;
-    // document.appendChild(img);
-    // console.log(binaryData);
   });
   reply('Hello');
 });
