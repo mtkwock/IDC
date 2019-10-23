@@ -206,6 +206,28 @@ function pureTimeExtend(params) {
   });
 }
 
+// 44
+function atkRcvFromMinHp(params) {
+  const [thresh, flag1, flag2, atkRcv100] = params;
+  let includeAtk = false;
+  let includeRcv = false;
+  if (flag1 == 1) {
+    includeAtk = true;
+  }
+  if (flag2 == 2) {
+    includeRcv = true;
+  }
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      return includeAtk && percentHp >= thresh ? atkRcv100 / 100 : 1;
+    },
+    rcvPost: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      return includeRcv && percentHp >= thresh ? atkRcv100 / 100 : 1;
+    },
+  });
+}
+
 // 61
 function atkScalingFromMatchedColors(params) {
   let [attrBits, minColors, atk100base, atk100scale, maxColors] = params;
@@ -898,6 +920,7 @@ function trueBonusFromLinkedOrbs(params) {
 const LEADER_SKILL_GENERATORS = {
   12: bonusAttackScale,
   15: pureTimeExtend,
+  44: atkRcvFromMinHp,
   61: atkScalingFromMatchedColors,
   66: atkBoostFromMinCombos,
   98: atkScalingFromCombos,
