@@ -1851,6 +1851,11 @@ function loadMonsterSearches() {
 function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined, filtered = false) {
   searchArray = searchArray || prioritizedMonsterSearch;
   text = text.toLowerCase();
+  let toEquip = false;
+  if (text.startsWith('equip')) {
+    text = text.substring('equip'.length).trimLeft();
+    toEquip = true;
+  }
   const result = [];
   // Test for exact match.
   if (text in vm.model.cards) {
@@ -1966,6 +1971,31 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined, filt
       break;
     }
     result.push(match[0]);
+  }
+  if (toEquip) {
+    let equips = [];
+    for (const id of result) {
+      const treeId = vm.model.cards[id].evoTreeBaseId;
+      if (treeId in vm.model.evoTrees) {
+        for (const card of vm.model.evoTrees[treeId].cards) {
+          if (!equips.includes(card.id) && card.awakenings[0] == IdcAwakening.AWOKEN_ASSIST) {
+            equips.push(card.id);
+          }
+        }
+      }
+    }
+    for (const id of result) {
+      if (!equips.includes(id)) {
+        equips.push(id);
+      }
+    }
+    if (equips.length > maxResults) {
+      equips.length = maxResults;
+    }
+    result.length = 0;
+    for (const id of equips) {
+      result.push(id);
+    }
   }
   return result;
 }
