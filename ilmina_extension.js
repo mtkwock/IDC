@@ -1796,6 +1796,7 @@ class ComboContainer {
 // To be loaded.
 let prioritizedMonsterSearch;
 let prioritizedInheritSearch;
+let prefixToCardIds = {};
 
 function loadMonsterSearches() {
   prioritizedMonsterSearch = Object.values(vm.model.cards).filter((card) => {
@@ -1826,6 +1827,13 @@ function loadMonsterSearches() {
     }
     return card2.id - card1.id;
   });
+
+  for (const group of vm.model.cardGroups) {
+    for (const alias of group.aliases.filter(
+        (alias) => alias.indexOf(' ') == -1 && alias == alias.toLowerCase())) {
+      prefixToCardIds[alias] = group.cards;
+    }
+  }
 }
 
 /**
@@ -1833,12 +1841,14 @@ function loadMonsterSearches() {
  * the text in priority order:
  * 1) Exact ID
  * 2) Name Contains Substring
- * 3) Fuzzily matches (All letters are present in order in name) 
+ *    a) Priotize where substrings are at the beginning or follow a space.
+ * 4) Fuzzily matches (All letters are present in order in name) 
+ *    a) Prioritizes consecutive letters.
  * @param {string} text
  * @param {number=} maxResults
  * @returns {!Array<number>}
  */
-function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined) {
+function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined, filtered = false) {
   searchArray = searchArray || prioritizedMonsterSearch;
   text = text.toLowerCase();
   const result = [];
@@ -1846,47 +1856,79 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined) {
   if (text in vm.model.cards) {
     result.push(text);
   }
-  const attributes = {
-    'r': 0, 'b': 1, 'g': 2, 'l': 3, 'd': 4, 'x': -1,
-  };
-  let attribute = -1;
-  let subattribute = -2;
-  let attributeText = '';
-  let subattributeText = '';
-  if (text.length > 2 && text[0] in attributes) {
-    attribute = attributes[text[0]];
-    attributeText = text.substring(1).trimLeft();
-    if (attributeText.length > 2 && attributeText[0] in attributes) {
-      subattribute = attributes[attributeText[0]];
-      subattributeText = attributeText.substring(1).trimLeft();
-    }
-  }
+  let lowerPriority = [];
   // Search for monsters whose substrings work.
   for (const card of searchArray) {
     if (result.length >= maxResults) {
       break;
     }
-    if (card.name.toLowerCase().indexOf(text) >= 0)  {
+    const idx = card.name.toLowerCase().indexOf(text);
+    if (idx < 0) {
+      continue;
+    }
+    if (idx == 0 || card.name[idx - 1] == ' ')  {
       result.push(card.id);
+    } else {
+      lowerPriority.push(card.id);
     }
   }
-  if (attributeText && result.length < maxResults) {
-    for (const card of searchArray.filter((card) => card.attribute == attribute)) {
-      key = card.id;
-      if (result.includes(key)) {
-        continue;
+  for (const id of lowerPriority) {
+    if (result.length < maxResults) {
+      result.push(id);
+    }
+  }
+  if (!filtered && result.length < maxResults) {
+    let collabMatches = [];
+    for (const prefix in prefixToCardIds) {
+      if (text.startsWith(prefix)) {
+        for (const match of fuzzyMonsterSearch(text.substring(prefix.length).trimLeft(), maxResults, searchArray.filter((card) => prefixToCardIds[prefix].includes(card.id)))) {
+          if (!collabMatches.includes(match)) {
+            collabMatches.push(match);
+          }
+        }
       }
-      if (card.name.toLowerCase().includes(attributeText)) {
-        result.push(key);
+    }
+    for (const match of collabMatches) {
+      if (result.length < maxResults && !result.includes(match)) {
+        result.push(match);
       }
-      if (subattributeText &&
-          result.length < maxResults &&
-          card.subattribute == subattribute &&
-          card.name.toLowerCase().includes(subattributeText)) {
-        result.push(key);
+    }
+    const attributes = {
+      'r': 0, 'b': 1, 'g': 2, 'l': 3, 'd': 4, 'x': -1,
+    };
+    let attribute = -1;
+    let subattribute = -2;
+    let attributeText = '';
+    let subattributeText = '';
+    if (text.length > 2 && text[0] in attributes) {
+      attribute = attributes[text[0]];
+      attributeText = text.substring(1).trimLeft();
+      if (attributeText.length > 2 && attributeText[0] in attributes) {
+        subattribute = attributes[attributeText[0]];
+        subattributeText = attributeText.substring(1).trimLeft();
+      }
+    }
+    if (subattributeText) {
+      const filteredSub = searchArray.filter((card) => card.attribute == attribute && card.subattribute == subattribute);
+      const matches = fuzzyMonsterSearch(subattributeText, maxResults, filteredSub, true);
+      for (const match of matches) {
+        if (result.length < maxResults && !result.includes(match)) {
+          result.push(match);
+        }
+      }
+    }
+    if (attributeText) {
+      const filteredAttr = searchArray.filter((card) => card.attribute == attribute);
+      const matches = fuzzyMonsterSearch(attributeText, maxResults, filteredAttr, true);
+      for (const match of matches) {
+        if (result.length < maxResults && !result.includes(match)) {
+          result.push(match);
+        }
       }
     }
   }
+
+  lowerPriority.length = 0;
   // Fuzzy match with the name.
   // This prioritizes values with consecutive letters.  
   for (const card of searchArray) {
@@ -1898,16 +1940,32 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined) {
     }
     const name = card.name.toLowerCase();
     let currentStringIdx = -1;
+    let score = 0;
+    let scoreDelta = 1;
     for (const c of text) {
-      currentStringIdx = name.indexOf(c, currentStringIdx + 1);
+      const nextIdx = name.indexOf(c, currentStringIdx + 1);
+      if (nextIdx == currentStringIdx + 1) {
+        scoreDelta *= 2;
+      } else {
+        scoreDelta = 1;
+      }
+      score += scoreDelta;
+      currentStringIdx = nextIdx;
       if (currentStringIdx < 0) {
         break;
       }
     }
     if (currentStringIdx >= 0) {
-      result.push(card.id);
+      lowerPriority.push([card.id, score]);
       continue;
     }
+  }
+  lowerPriority.sort((a, b) => b[1] - a[1]);
+  for (const match of lowerPriority) {
+    if (result.length > maxResults) {
+      break;
+    }
+    result.push(match[0]);
   }
   return result;
 }
@@ -1923,6 +1981,7 @@ class StoredTeams {
   constructor() {
     this.mode = 'teams';
     this.teams = {};
+    // TODO: Add dungeon loading/saving.
     this.dungeons = {};
     if (window.localStorage.idcStoredTeams) {
       this.teams = JSON.parse(window.localStorage.idcStoredTeams);
