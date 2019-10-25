@@ -202,8 +202,7 @@ const AWAKENING_BONUS = new Map([
   [IdcAwakening.ATK, 100],
   [IdcAwakening.ATK_MINUS, -1000],
   [IdcAwakening.RCV, 200],
-  [IdcAwakening.RCV, -2000],
-
+  [IdcAwakening.RCV_MINUS, -2000],
 ]);
 
 // TODO: Put all ids as constants in here so that I can access them reliably.
