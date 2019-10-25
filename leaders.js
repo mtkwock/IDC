@@ -1,22 +1,12 @@
 const baseLeaderSkill = Object.freeze({
   // Boolean values
-  bigBoard: () => {
-    return false;
-  },
-  noSkyfall: () => {
-    return false;
-  },
-  minOrbMatch: () => {
-    return 3;
-  },
+  bigBoard: false,
+  noSkyfall:  false,
+  minOrbMatch: 3,
   // Don Chan/Soprano's Drumming.
-  drumEffect: () => {
-    return false;
-  },
+  drumEffect: false,
   // If nonzero, overrides all other time.
-  fixedTime: () => {
-    return 0;
-  },
+  fixedTime: 0,
   // Multiplicative values
   hp: (monster, team, isMultiplayer) => {
     return 1;
@@ -41,12 +31,8 @@ const baseLeaderSkill = Object.freeze({
   drop: (isMultiplayer) => {
     return 1;
   },
-  coins: () => {
-    return 1;
-  },
-  exp: () => {
-    return 1;
-  },
+  coins: 1,
+  exp: 1,
   // Additive values
   plusCombo: (team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 0;
@@ -93,28 +79,13 @@ function combineLeaderSkills(ls1, ls2) {
   // console.log(ls2);
   return {
     // Boolean values
-    bigBoard: () => {
-      return ls1.bigBoard() || ls2.bigBoard();
-    },
-    noSkyfall: () => {
-      return ls1.noSkyfall() || ls2.noSkyfall();
-    },
-    minOrbMatch: () => {
-      return Math.max(ls1.minOrbMatch(), l2.minOrbMatch());
-    },
+    bigBoard: ls1.bigBoard || ls2.bigBoard,
+    noSkyfall: ls1.noSkyfall || ls2.noSkyfall,
+    minOrbMatch: Math.max(ls1.minOrbMatch, ls2.minOrbMatch),
     // Don Chan/Soprano's Drumming.
-    drumEffect: () => {
-      return ls1.drumEffect() || ls2.drumEffect();
-    },
+    drumEffect: ls1.drumEffect || ls2.drumEffect,
     // If nonzero, overrides all other time.
-    fixedTime: () => {
-      const fs1 = ls1.fixedTime();
-      const fs2 = ls2.fixedTime();
-      if (fs1 && fs2) {
-        return Math.min(fs1, fs2);
-      }
-      return fs1 || fs2;
-    },
+    fixedTime: (ls1.fixedTime && ls2.fixedTime) ? Math.min(ls1.fixedTime, ls2.fixedTime) : ls1.fixedTime || ls2.fixedTime,
     // Multiplicative values
     hp: (...args) => {
       return ls1.hp(...args) * ls2.hp(...args);
@@ -134,12 +105,8 @@ function combineLeaderSkills(ls1, ls2) {
     drop: (...args) => {
       return ls1.drop(...args) * ls2.drop(...args);
     },
-    coins: () => {
-      return ls1.coins() * ls2.coins();
-    },
-    exp: () => {
-      return ls1.exp() * ls2.exp();
-    },
+    coins: ls1.coins * ls2.coins,
+    exp: ls1.exp * ls2.exp,
     damageMult: (...args) => {
       return ls1.damageMult(...args) * ls2.damageMult(...args);
     },
@@ -578,7 +545,7 @@ function statBoostFromMultiplayer(params) {
 // 162
 function bigBoardLeader(params) {
   return createLeaderSkill({
-    bigBoard: () => true,
+    bigBoard: true,
   });
 }
 
@@ -586,7 +553,7 @@ function bigBoardLeader(params) {
 function noSkyfallAndBaseStatFromAttributeType(params) {
   // const [attrBits, typeBits, hp100, atk100, rcv100, ...remainder] = params;
   const leaderSkill = baseStatFromAttributeType(params);
-  leaderSkill.noSkyfall = () => true;
+  leaderSkill.noSkyfall = true;
   return leaderSkill;
 }
 
@@ -598,6 +565,9 @@ function atkRcvScalingFromLinkedOrbs(params) {
   let maxMatch = minMatch;
   if (remaining) {
     [atk100scale, rcv100scale, maxMatch] = remaining;
+    atk100scale = atk100scale || 0;
+    rcv100scale = rcv100scale || 0;
+    maxMatch = maxMatch || minMatch;
   }
   const attrs = idxsFromBits(attrBits);
 
@@ -739,7 +709,7 @@ function atkBoostFromOrbsRemaining(params) {
   }
 
   return createLeaderSkill({
-    noSkyfall: () => true,
+    noSkyfall: true,
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       let orbsRemaining = comboContainer.boardWidth * (comboContainer.boardWidth - 1);
       for (const c in comboContainer.combos) {
@@ -845,7 +815,7 @@ function bigBoardAndBaseStatFromAttributeType(params) {
   const [attrBits, typeBits, hp100, atk100, rcv100] = params;
   const leaderSkill = baseStatFromAttributeType(
       [attrBits, typeBits, hp100, atk100, rcv100]);
-  leaderSkill.bigBoard = () => true;
+  leaderSkill.bigBoard = true;
   return leaderSkill
 }
 

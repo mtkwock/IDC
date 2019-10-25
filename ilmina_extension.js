@@ -74,6 +74,43 @@ const Latent = {
   RESIST_DARK_PLUS: 32,
 };
 
+const LatentToPdchu = new Map([
+  [Latent.HP, 'hp'],
+  [Latent.ATK, 'atk'],
+  [Latent.RCV, 'rcv'],
+  [Latent.HP, 'hp+'],
+  [Latent.ATK, 'atk+'],
+  [Latent.RCV, 'rcv+'],
+  [Latent.TIME, 'te'],
+  [Latent.TIME_PLUS, 'te+'],
+  [Latent.AUTOHEAL, 'ah'],
+  [Latent.RESIST_FIRE, 'rres'],
+  [Latent.RESIST_WATER, 'bres'],
+  [Latent.RESIST_WOOD, 'gres'],
+  [Latent.RESIST_LIGHT, 'lres'],
+  [Latent.RESIST_DARK, 'dres'],
+  [Latent.RESIST_FIRE_PLUS, 'rres+'],
+  [Latent.RESIST_WATER_PLUS, 'bres+'],
+  [Latent.RESIST_WOOD_PLUS, 'gres+'],
+  [Latent.RESIST_LIGHT_PLUS, 'lres+'],
+  [Latent.RESIST_DARK_PLUS, 'dres+'],
+  [Latent.SDR, 'sdr'],
+  [Latent.ALL_STATS, 'all'],
+  [Latent.EVO, 'evk'],
+  [Latent.AWOKEN, 'awk'],
+  [Latent.ENHANCED, 'enk'],
+  [Latent.REDEEMABLE, 'rek'],
+  [Latent.GOD, 'gok'],
+  [Latent.DEVIL, 'dek'],
+  [Latent.DRAGON, 'drk'],
+  [Latent.MACHINE, 'mak'],
+  [Latent.BALANCED, 'bak'],
+  [Latent.ATTACKER, 'aak'],
+  [Latent.PHYSICAL, 'phk'],
+  [Latent.HEALER, 'hek'],
+
+  ]);
+
 const LATENT_HP = new Map([
   [Latent.HP, 0.015],
   [Latent.HP_PLUS, 0.045],
@@ -280,6 +317,30 @@ class MonsterInstance {
       inheritLevel: this.inheritLevel,
       inheritPlussed: this.inheritPlussed,
     }
+  }
+
+  toPdchu() {
+    let string = '';
+    if (this.id in vm.model.cards) {
+      string += String(this.id);
+    } else {
+      string += 'sdr';
+    }
+
+    if (this.inheritId in vm.model.cards) {
+      string += ` (${this.inheritId} | lv${this.inheritLevel} +${this.inheritPlussed ? 297 : 0})`;
+    }
+
+    if (this.latents.length) {
+      string += '[' + this.latents.map((latent) => LatentToPdchu.get(latent)).join(',') + ']';
+    }
+
+    string += ` | lv${this.level} aw${this.awakenings} +H${this.hpPlus} +A${this.atkPlus} +R${this.rcvPlus}`;
+
+    if (this.superAwakeningIdx >= 0) {
+      string += ` sa${this.superAwakeningIdx + 1}`;
+    }
+    return string;
   }
 
   copyFrom(otherInstance) {
@@ -1094,12 +1155,69 @@ EnemySkillset.fromJson = (json) => {
   return skillset;
 }
 
-class EnemyInstance {
-  constructor(idc) {
-    this.idc = idc;
-    this.id = -1;
+function attributeMultiplier(attacker, defender) {
+  if (attacker == 0 && defender == 1) {
+    return 0.5;
+  } else if (attacker == 0 && defender == 2) {
+    return 2;
+  } else if (attacker == 1 && defender == 2) {
+    return 0.5;
+  } else if (attacker == 1 && defender == 0) {
+    return 2;
+  } else if (attacker == 2 && defender == 0) {
+    return 0.5;
+  } else if (attacker == 2 && defender == 1) {
+    return 2;
+  } else if (attacker == 3 && defender == 4) {
+    return 2;
+  } else if (attacker == 4 && defender == 3) {
+    return 2;
+  }
+  return 1;
+}
 
+const TypeToLatent = {
+  0: Latent.EVO,
+  1: Latent.BALANCED,
+  2: Latent.PHYSICAL,
+  3: Latent.HEALER,
+  4: Latent.DRAGON,
+  5: Latent.GOD,
+  6: Latent.ATTACKER,
+  7: Latent.DEVIL,
+  8: Latent.MACHINE,
+  9: -1,
+  10: -1,
+  11: -1,
+  12: Latent.AWAKENING,
+  13: -1,
+  14: Latent.ENHANCED,
+  15: Latent.REDEEMABLE,
+};
+
+const TypeToKiller = {
+  0: IdcAwakening.EVO,
+  1: IdcAwakening.BALANCED,
+  2: IdcAwakening.PHYSICAL,
+  3: IdcAwakening.HEALER,
+  4: IdcAwakening.DRAGON,
+  5: IdcAwakening.GOD,
+  6: IdcAwakening.ATTACKER,
+  7: IdcAwakening.DEVIL,
+  8: IdcAwakening.MACHINE,
+  9: -1,
+  10: -1,
+  11: -1,
+  12: IdcAwakening.AWAKENING,
+  13: -1,
+  14: IdcAwakening.ENHANCED,
+  15: IdcAwakening.REDEEMABLE,
+};
+
+class EnemyInstance {
+  constructor() {
     // Passives that are always applied
+    this.id = -1;
     this.maxHp = 1;
     this.attack = 1;
     this.defense = 0;
@@ -1126,13 +1244,94 @@ class EnemyInstance {
     // Values that can be set by players.
     this.ignoreAttributeAbsorb = false;
     this.ignoreDamageAbsorb = false;
-    this.ignoreVoid = false;
+    this.ignoreDamageVoid = false;
     this.ignoreDefensePercent = 0;
     this.poison = 0;
     this.delayed = false; // Not to be used yet.
   }
 
-  reset() {
+  getAttribute() {
+    if (this.id in vm.model.cards && this.currentAttribute == -1) {
+      return vm.model.cards[this.id].attribute;
+    }
+    return this.currentAttribute;
+  }
+
+  calcDamage(ping, pings, comboContainer, isMultiplayer) {
+    let currentDamage = ping.amount;
+    const types = vm.model.cards[this.id] ? vm.model.cards[this.id].types : [];
+    // Attribute Advantage
+    currentDamage *= attributeMultiplier(ping.attribute, this.getAttribute());
+    currentDamage = Math.ceil(currentDamage);
+
+    // Killers
+    const killerCount = ping.source.getAwakenings(isMultiplayer, new Set(types.map((type) => TypeToKiller[type]))).length;
+    currentDamage *= (3 ** killerCount);
+
+    // Latent Killers
+    const validLatents = types.map((type) => TypeToLatent[type]);
+    const latentCount = ping.source.latents.filter((latent) => validLatents.includes(latent)).length;
+    currentDamage *= (1.5 ** latentCount);
+    currentDamage = Math.ceil(currentDamage);
+    if (currentDamage >= 2147483648) {
+      currentDamage = 2147483647;
+    }
+
+    // Innate Resists (e.g. attribute + type)
+    // TODO: type.
+    if (this.attributesResisted.includes(ping.attribute)) {
+      currentDamage *= 0.5;
+    }
+    currentDamage = Math.ceil(currentDamage);
+
+    // Shield
+    currentDamage = currentDamage * (100 - this.shieldPercent) / 100
+    currentDamage = Math.ceil(currentDamage);
+
+    // Defense + Guard Break, Damage afterward is minimum 1.
+    if (ping.source.countAwakening(IdcAwakening.GUARD_BREAK) == 0 ||
+        (new Set(pings.map((ping) => ping.attribute))).size < 5) {
+      const defense = this.defense * (100 - this.ignoreDefensePercent) / 100;
+      currentDamage -= this.defense;
+      currentDamage = Math.ceil(currentDamage);
+
+      currentDamage = Math.max(currentDamage, 1);
+    }
+
+    // Void
+    if (this.damageVoid > 0
+        && currentDamage > damageVoid
+        && !this.ignoreDamageVoid
+        && comboContainer.combos[COLORS[ping.attribute]].every((combo) => combo.shape != Shape.BOX)) {
+      currentDamage = 0;
+    }
+
+    // Absorbs
+    if (this.attributeAbsorb.includes(ping.attribute) && !this.ignoreAttributeAbsorb ||
+        this.damageAbsorb > 0 && currentDamage >= this.damageAbsorb && !this.ignoreDamageAbsorb ||
+        this.comboAbsorb > 0 && comboContainer.comboCount() <= this.comboAbsorb) {
+      currentDamage *= -1;
+    }
+
+    return currentDamage;
+  }
+
+  setId(id) {
+    if (!id in vm.model.cards) {
+      return;
+    }
+
+    this.id = id;
+  }
+
+  getName() {
+    if (this.id < 0 || !(this.id in vm.model.cards)) {
+      return '-- Unset Enemy --';
+    }
+    return vm.model.cards[this.id].name;
+  }
+
+  reset(idc) {
     this.currentHp = this.maxHp;
     this.currentAttribute = -1;
     this.statusShield = false;
@@ -1151,8 +1350,16 @@ class EnemyInstance {
     this.poison = 0;
     this.delayed = false;
     if (this.preemptiveSkillset) {
-      this.preemptiveSkillset.applySkillset();
+      this.preemptiveSkillset.applySkillset(idc, this);
     }
+  }
+
+  useSkillset(skillIdx, idc) {
+    if (!skillIdx in this.skillsets) {
+      console.warn(`Invalid idx: ${skillIdx}, not performing any.`)
+      return;
+    }
+    this.skillsets[skillIdx].applySkillset(idc, this);
   }
 
   toJson() {
@@ -1186,10 +1393,91 @@ EnemyInstance.fromJson = (json) =>{
   return instance;
 };
 
+const FontColors = ['red', 'cyan', 'lawngreen', 'yellow', 'fuchsia'];
+
 
 class DungeonFloor {
   constructor() {
-    this.enemies = [];
+    this.enemies = [new EnemyInstance()];
+    this.activeEnemy = 0;
+  }
+
+  createEditorElement(idx, isSelected = false) {
+    const el = document.createElement('tr');
+    el.id = `idc-dungeon-floor-${idx}`;
+
+    const floorName = document.createElement('td');
+    floorName.innerText = `F${idx + 1}`;
+    floorName.style.minWidth = '25px';
+    el.appendChild(floorName);
+
+    const enemies = document.createElement('td');
+    enemies.className = 'idc-dungeon-floor-enemies';
+
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemyEl = document.createElement('div');
+      const enemy = this.enemies[i];
+      enemyEl.innerText = `${enemy.getName()}`;
+      enemyEl.onclick = () => {
+        this.activeEnemy = i;
+      }
+      if (isSelected && i == this.activeEnemy) {
+        enemyEl.style.border = BORDER_COLOR;
+      }
+      enemies.appendChild(enemyEl);
+    }
+    el.appendChild(enemies);
+    const deleteEl = document.createElement('td');
+    deleteEl.className = 'idc-dungeon-floor-delete';
+    deleteEl.innerText = '[X]';
+    el.appendChild(deleteEl);
+    return el;
+  }
+
+  reloadEditorElement(el, isSelected) {
+    const enemyEls = el.getElementsByClassName('idc-dungeon-floor-enemies');
+    for (let i = 0; i < this.enemies.length || i < enemyEls.length; i++) {
+      if (i >= this.enemies.length) {
+        enemyEls[i].style.display = 'none';
+        continue;
+      }
+      if (i >= enemyEls.length) {
+        const enemyEl = document.createElement('div');
+        const enemy = this.enemies[i];
+        enemyEl.innerText = `${enemy.getName()}`;
+        enemyEl.onclick = () => {
+          this.activeEnemy = i;
+        }
+        if (isSelected && i == this.activeEnemy) {
+          enemyEl.style.border = BORDER_COLOR;
+        }
+        el.appendChild(enemyEl);
+        const deleteEl = document.createElement('td');
+        deleteEl.className = 'idc-dungeon-floor-delete';
+        deleteEl.innerText = '[X]';
+        el.appendChild(deleteEl);
+        continue;
+      }
+      enemyEls[i].innerText = `${this.enemies[i].getName()}`;
+      if (isSelected && i == this.activeEnemy) {
+        enemyEls[i].style.border = BORDER_COLOR;
+      } else {
+        enemyEls[i].style.border = '';
+      }
+      enemyEls[i].display = '';
+    }
+  }
+
+  deleteEnemy(idx) {
+    if (this.enemies.length <= 1 || !idx in this.enemies) {
+      console.warn('Unable to delete enemy from floor.');
+      return;
+    }
+    this.enemies.splice(idx, 1);
+  }
+
+  getActiveEnemy() {
+    return this.enemies[this.activeEnemy];
   }
 
   toJson() {
@@ -1207,24 +1495,330 @@ DungeonFloor.fromJson = (json) => {
 
 class DungeonInstance {
   constructor() {
-    this.name = '';
-    this.floors = [];
+    this.title = '';
+    // Ignoring 5x4 boards.
+    this.bigBoard = false;
+    this.fixedTime = 0;
+    // Sets all of your monsters to level 1 temporarily.
+    this.isRogue = false;
+    this.allAttributesRequired = false;
+
+    this.floors = [new DungeonFloor()];
+
+    this.activeFloor = 0;
+    this.editorElement = this.createEditorElement();
+  }
+
+  addFloor() {
+    this.floors.push(new DungeonFloor());
+    this.reloadEditorElement();
+  }
+
+  deleteFloor(idx) {
+    if (this.floors.length <= 1 || !(idx in this.floors)) {
+      console.warn('Unable to delete floor.');
+      return;
+    }
+    this.floors.splice(idx, 1);
+    this.reloadEditorElement();
+    this.reloadBattleElement();
+  }
+
+  createEnemySelector() {
+    const maxResults = 15;
+    const enemySelection = document.createElement('div');
+    const enemySelector = document.createElement('input');
+    enemySelector.style.width = '100%';
+    enemySelector.placeholder = 'Monster Search';
+    const options = document.createElement('div');
+    options.display = 'none';
+    for (let i = 0; i < maxResults; i++) {
+      const option = document.createElement('div');
+      option.id = `idc-enemy-select-option-${i}`;
+      option.value = '0';
+      option.style.display = 'none';
+      options.style.fontSize = 'x-small';
+      option.onmouseover = () => {
+        option.style.border = BORDER_COLOR;
+      }
+      option.onmouseleave = () => {
+        option.style.border = '';
+      }
+      option.onclick = () => {
+        options.style.display = 'none';
+        enemySelector.value = option.value;
+        this.getActiveEnemy().setId(enemySelector.value);
+        this.reloadEditorElement();
+        this.reloadBattleElement();
+      }
+      options.appendChild(option);
+    }
+    enemySelector.id = 'idc-selector-enemy';
+    enemySelector.onkeyup = (e) => {
+      if (e.keyCode == 13) {
+        const value = document.getElementById(`idc-enemy-select-option-0`).value;
+        console.log(`Changing monster id to ${value}`);
+        this.getActiveEnemy().setId(value);
+        options.style.display = 'none';
+        this.reloadEditorElement();
+        this.reloadBattleElement();
+        return;
+      }
+      const currentText = e.target.value.toLowerCase();
+      if (currentText == '') {
+        options.style.display = 'none';
+        return;
+      }
+      options.style.display = 'block';
+      const fuzzyMatches = fuzzyMonsterSearch(currentText, maxResults);
+      for (let i = 0; i < fuzzyMatches.length && i < maxResults; i++) {
+        const option = document.getElementById(`idc-enemy-select-option-${i}`);
+        const key = fuzzyMatches[i];
+        option.innerText = `${key} - ${vm.model.cards[key].name}`;
+        option.value = key;
+        option.style.display = 'block';
+      }
+      for (let i = fuzzyMatches.length; i < maxResults; i++) {
+        const option = document.getElementById(`idc-enemy-select-option-${i}`);
+        option.style.display = 'none';
+      }
+    }
+    enemySelection.onblur = () => {
+      options.style.display = 'none';
+    }
+    enemySelection.appendChild(enemySelector);
+    enemySelection.appendChild(document.createElement('br'));
+    enemySelection.appendChild(options);
+    return enemySelection;
+  }
+
+  createEditorElement() {
+    const dungeonContainer = document.createElement('div');
+    dungeonContainer.id = 'idc-dungeon-editor';
+    dungeonContainer.style.padding = '5px';
+    dungeonContainer.style.borderLeft = BORDER_COLOR;
+    dungeonContainer.style.borderRight = BORDER_COLOR;
+    const titleSetter = document.createElement('input');
+    titleSetter.id = 'idc-dungeon-editor-title'
+    titleSetter.onkeyup = () => {
+      this.title = titleSetter.value;
+    };
+    dungeonContainer.appendChild(titleSetter);
+
+    const floorAdder = document.createElement('a');
+    floorAdder.id = 'idc-dungeon-editor-addfloor';
+    floorAdder.innerText = 'Add Floor';
+    floorAdder.onclick = () => {
+      this.addFloor();
+    };
+    dungeonContainer.appendChild(floorAdder);
+
+    const floorsEditor = document.createElement('table');
+    floorsEditor.id = 'idc-dungeon-editor-floors'
+    floorsEditor.style.fontSize = 'small';
+    for (let i = 0; i < this.floors.length; i++) {
+      const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
+      floorEditor.onclick = () => {
+        this.activeFloor = i;
+        this.reloadEditorElement();
+        this.reloadBattleElement();
+      }
+      const floorDelete = floorEditor.getElementsByClassName('idc-dungeon-floor-delete')[0];
+      floorDelete.onclick = () => {
+        this.deleteFloor(i);
+      }
+
+      floorsEditor.appendChild(floorEditor);
+    }
+    dungeonContainer.appendChild(floorsEditor);
+
+    const enemyEditor = document.createElement('div');
+    enemyEditor.appendChild(this.createEnemySelector());
+
+    const enemyStatEditTable = document.createElement('table');
+
+    const hpRow = document.createElement('tr');
+    const hpLabel = document.createElement('td');
+    hpLabel.innerText = 'Max HP';
+    hpRow.appendChild(hpLabel);
+    const hpValue = document.createElement('td');
+    const maxHpEditor = document.createElement('input');
+    maxHpEditor.id = 'idc-enemy-maxhp';
+    maxHpEditor.type = 'number';
+    maxHpEditor.onchange = () => {
+      this.getActiveEnemy().maxHp = Number(maxHpEditor.value);
+      this.getActiveEnemy().currentHp = Number(maxHpEditor.value);
+      this.reloadBattleElement();
+    }
+    hpValue.appendChild(maxHpEditor);
+    hpRow.appendChild(hpValue);
+    enemyStatEditTable.appendChild(hpRow);
+    // this.attack = 1;
+    const atkRow = document.createElement('tr');
+    const atkLabel = document.createElement('td');
+    atkLabel.innerText = 'Attack';
+    atkRow.appendChild(atkLabel);
+    const atkValue = document.createElement('td');
+    const atkEditor = document.createElement('input');
+    atkEditor.id = 'idc-enemy-attack';
+    atkEditor.type = 'number';
+    atkEditor.onchange = () => {
+      this.getActiveEnemy().attack = atkEditor.value;
+      this.reloadBattleElement();
+    }
+    atkValue.appendChild(atkEditor);
+    atkRow.appendChild(atkValue);
+    enemyStatEditTable.appendChild(atkRow);
+    // this.defense = 0;
+    const defenseRow = document.createElement('tr');
+    const defenseLabel = document.createElement('td');
+    defenseLabel.innerText = 'Defense';
+    defenseRow.appendChild(defenseLabel);
+    const defenseValue = document.createElement('td');
+    const defenseEditor = document.createElement('input');
+    defenseEditor.id = 'idc-enemy-defense';
+    defenseEditor.type = 'number';
+    defenseEditor.onchange = () => {
+      this.getActiveEnemy().defense = defenseEditor.value;
+      this.reloadBattleElement();
+    }
+    defenseValue.appendChild(defenseEditor);
+    defenseRow.appendChild(defenseValue);
+    enemyStatEditTable.appendChild(defenseRow);
+    // this.resolvePercent = 0;
+    const resolveRow = document.createElement('tr');
+    const resolveLabel = document.createElement('td');
+    resolveLabel.innerText = 'Resolve (%)';
+    resolveRow.appendChild(resolveLabel);
+    const resolveValue = document.createElement('td');
+    const resolveEditor = document.createElement('input');
+    resolveEditor.id = 'idc-enemy-resolve';
+    resolveEditor.type = 'number';
+    resolveEditor.onchange = () => {
+      this.getActiveEnemy().resolvePercent = resolveEditor.value;
+      this.reloadBattleElement();
+    }
+    resolveValue.appendChild(resolveEditor);
+    resolveRow.appendChild(resolveValue);
+    enemyStatEditTable.appendChild(resolveRow);
+    // this.attributesResisted = [];
+    const resistAttributeRow = document.createElement('tr');
+    const resistAttributeLabel = document.createElement('td');
+    resistAttributeLabel.innerText = 'Resist Attr';
+    resistAttributeRow.appendChild(resistAttributeLabel);
+    const resistAttributeValue = document.createElement('td');
+    const resistAttributeEditor = document.createElement('table');
+    const resistAttributesActualValues = document.createElement('tr');
+    const resistAttributesLabelValues = document.createElement('tr');
+    for (let i = 0; i < 5; i++) {
+      const cellUp = document.createElement('td');
+      const elCheckbox = document.createElement('input');
+      elCheckbox.id = `idc-enemy-resist-attributes-${i}`;
+      elCheckbox.className = 'idc-enemy-resist-attributes';
+      elCheckbox.value = i;
+      elCheckbox.type = 'checkbox';
+      elCheckbox.onclick = () => {
+        this.getActiveEnemy().attributesResisted.length = 0;
+        for (const checkbox of document.getElementsByClassName('idc-enemy-resist-attributes')) {
+          if (checkbox.checked) {
+            this.getActiveEnemy().attributesResisted.push(Number(checkbox.value));
+          }
+        }
+        this.reloadBattleElement();
+      }
+      cellUp.appendChild(elCheckbox);
+      resistAttributesActualValues.appendChild(cellUp);
+      const cellDown = document.createElement('td');
+      cellDown.innerText = COLORS[i].toUpperCase();
+      resistAttributesLabelValues.appendChild(cellDown);
+    }
+    resistAttributeEditor.appendChild(resistAttributesActualValues);
+    resistAttributeEditor.appendChild(resistAttributesLabelValues);
+    // resistAttributeValue.appendChild(resistAttributeRow);
+    resistAttributeValue.appendChild(resistAttributeEditor);
+    resistAttributeRow.appendChild(resistAttributeValue);
+    enemyStatEditTable.appendChild(resistAttributeRow);    // this.typesResisted = [];
+    // this.preemptiveSkillset = null; // Used when loading the monster.
+    // this.skillsets = [];
+    // this.turnCounter = 1; // Not to be used yet.
+    enemyEditor.appendChild(enemyStatEditTable);
+    dungeonContainer.appendChild(enemyEditor);
+
+    return dungeonContainer;
+  }
+
+  reloadEditorElement() {
+    const floorsEditor = document.getElementById('idc-dungeon-editor-floors');
+    const floorRows = floorsEditor.getElementsByTagName('tr');
+
+    for (let i = 0; i < this.floors.length; i++) {
+      if (floorRows.length <= i) {
+        const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
+        floorEditor.onclick = () => {
+          this.activeFloor = i;
+          this.reloadEditorElement();
+          this.reloadBattleElement();
+        }
+        floorsEditor.appendChild(floorEditor);
+        const floorDelete = floorEditor.getElementsByClassName('idc-dungeon-floor-delete')[0];
+        floorDelete.onclick = () => {
+          this.deleteFloor(i);
+        }
+        continue;
+      }
+      this.floors[i].reloadEditorElement(floorRows[i], i == this.activeFloor);
+      floorRows[i].style.display = '';
+    }
+    for (let i = this.floors.length; i < floorRows.length; i++) {
+      floorRows[i].style.display = 'none';
+    }
+
+    const enemy = this.getActiveEnemy();
+    document.getElementById('idc-selector-enemy').value = enemy.getName();
+    document.getElementById('idc-enemy-maxhp').value = enemy.maxHp;
+    document.getElementById('idc-enemy-attack').value = enemy.attack;
+    document.getElementById('idc-enemy-defense').value = enemy.defense;
+    document.getElementById('idc-enemy-resolve').value = enemy.resolvePercent;
+    for (const el of document.getElementsByClassName('idc-enemy-resist-attributes')) {
+      el.checked = enemy.attributesResisted.includes(el.value);
+    }
+  }
+
+  createBattleElement() {
+    const el = document.createElement('div');
+    el.id = 'idc-battle-opponent';
+    const opponentImage = document.createElement('img');
+    opponentImage.id = 'idc-battle-opponent-img';
+    const enemyId = this.getActiveEnemy().id;
+    opponentImage.src = enemyId in vm.model.cards ? CardAssets.getCroppedPortrait(vm.model.cards[enemyId]) : '';
+    opponentImage.style.maxWidth = '350px';
+    el.appendChild(opponentImage);
+
+    // TODO: Add controllers for buffs and debuffs.
+
+    return el;
+  }
+
+  reloadBattleElement() {
+    const opponentImage = document.getElementById('idc-battle-opponent-img');
+    const enemyId = this.getActiveEnemy().id;
+    opponentImage.src = enemyId in vm.model.cards ? CardAssets.getCroppedPortrait(vm.model.cards[enemyId]) : '';
+  }
+
+  getActiveEnemy() {
+    return this.floors[this.activeFloor].getActiveEnemy();
   }
 
   toJson() {
     return {
-      name: this.name,
+      title: this.title,
       floors: this.floors.map((floor) => floor.toJson()),
     };
   }
 
   loadJson(json) {
-    this.name = json.name;
+    this.title = json.title;
     this.floors = json.floors.map((floor) => DungeonFloor.fromJson(floor));
-  }
-
-  save() {
-    window.localStorage.idcStoredDungeons
   }
 }
 
@@ -2128,6 +2722,11 @@ class DamagePing {
   }
 }
 
+// https://stackoverflow.com/questions/2901102/how-to-print-a-number-with-commas-as-thousands-separators-in-javascript
+function numberWithCommas(x) {
+    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 
 class Idc {
   constructor() {
@@ -2165,6 +2764,8 @@ class Idc {
         new MonsterInstance(), new MonsterInstance(), new MonsterInstance(),
     ];
 
+    this.dungeon = new DungeonInstance();
+
     this.playerMode = 2;
     this.activeTeamIdx = 0;
 
@@ -2198,6 +2799,22 @@ class Idc {
     this.skillUsed = true;
 
     this.hpPercent = 100;
+  }
+
+  toPdchu() {
+    const strings = this.monsters.map((monster) => monster.toPdchu());
+    switch (this.playerMode) {
+      case 1:
+        return strings.slice(0, 6).join(' / ');
+      case 2:
+        return strings.slice(0, 5).join(' / ') + ' ; ' + strings.slice(6, 11).join(' / ');
+      case 3:
+        const team1 = strings.slice(0, 6).join(' / ');
+        const team2 = strings.slice(6, 12).join(' / ');
+        const team3 = strings.slice(12, 18).join(' / ');
+        return [team1, team2, team3].join(' ; ');
+    }
+    return '';
   }
 
   getHpPercent() {
@@ -2313,6 +2930,9 @@ class Idc {
 
   // Get all pings. Does not include
   getDamagePre() {
+    // Cleanup.
+    this.combos.bonusCombos = 0;
+
     let monsters = this.getActiveTeam();
     const lead = getLeaderSkillEffects(monsters[0].getCard().leaderSkillId);
     const helper = getLeaderSkillEffects(monsters[5].getCard().leaderSkillId);
@@ -2450,16 +3070,14 @@ class Idc {
     healing = Math.ceil(healing * comboMultiplier);
 
     // Apply awakenings.
-    // For some reason, this is a Round.NEAREST for rows.
-    // This may need to be split out if other things like SFua cause it to behave differently.
-    // Known order:
+    // Known order according to PDC:
     // (7c/10c), (80%/50%), Rows, Sfua, L-Guard
     // Poison Blessing occurs after rows.  Unknown relative to L-Guard as it's impossible to get both.
-    // Jammer applies after Sfua
+    // Jammer applies after Sfua.
     // Assuming:
     // (7c/10c), (80%/50%), Rows, Sfua, L-Guard, JammerBless, PoisonBless
 
-    // 7c + 10c
+    // 7c + 10c. Order does not matter since they are both whole number multiplications.
     for (const ping of pings) {
       const count = this.combos.comboCount();
       let multiplier = 1;
@@ -2472,7 +3090,7 @@ class Idc {
       ping.multiply(multiplier);
     }
 
-    // <=50%, >=80%
+    // <=50%, >=80%. Order does not matter since they are mutually exclusive.
     for (const ping of pings) {
       const percent = this.getHpPercent();
       let multiplier = 1;
@@ -2527,8 +3145,12 @@ class Idc {
       ping.multiply(multiplier, Round.NEAREST);
     }
 
-    // Cleanup.
-    this.combos.bonusCombos = 0;
+    // Handle damage cap.
+    for (const ping of pings) {
+      if (ping.amount >= 2147483648) {
+        ping.amount = 2147483647;
+      }
+    }
 
     // TODO: Determine regular bonus attacks.
     return {
@@ -2811,6 +3433,7 @@ class Idc {
     const team = this.getActiveTeam();
     const mp = this.isMultiplayer();
     const awoke = this.effects.awakenings;
+    const enemy = this.dungeon.getActiveEnemy();
     const {pings, bonusAttacks, healing, trueBonusAttacks} = this.getDamagePre();
     for (const el of document.getElementsByClassName('idc-stat-damage-pre-main')) {
       el.innerText = '';
@@ -2818,10 +3441,31 @@ class Idc {
     for (const el of document.getElementsByClassName('idc-stat-damage-pre-sub')) {
       el.innerText = '';
     }
+
+    let currentHp = enemy.currentHp;
+    // TODO: Figure out this precisely.
+    const resolveActive = enemy.resolvePercent > 0 && (100 * enemy.currentHp / enemy.maxHp) > enemy.resolvePercent;
+    for (const ping of pings) {
+      ping.rawDamage = enemy.calcDamage(ping, pings, this.combos, this.isMultiplayer());
+      let next = currentHp - ping.rawDamage;
+      if (next < 0) {
+        next = 0;
+      }
+      if (next < 1 && resolveActive) {
+        next = 1;
+      }
+      if (next > enemy.maxHp) {
+        next = enemy.maxHp;
+      }
+      ping.actualDamage = currentHp - next;
+      currentHp = next;
+    }
+
     for (let i = 0; i < 6; i++) {
       const iconEl = document.getElementById(`idc-stat-icon-${i}`);
       const baseStatEl = document.getElementById(`idc-stat-base-${i}`);
       const damageEl = document.getElementById(`idc-stat-damage-pre-${i}`);
+      const postDamageEl = document.getElementById(`idc-stat-damage-post-${i}`);
       // Handle no team member not present.
       if (!team[i]) {
         iconEl.innerText = '';
@@ -2837,19 +3481,32 @@ class Idc {
       for (const ping of pings.filter((ping) => ping.source == team[i])) {
         const classToFind = ping.isSub ? 'idc-stat-damage-pre-sub' : 'idc-stat-damage-pre-main';
         const damagePreEl = damageEl.getElementsByClassName(classToFind)[0];
-        damagePreEl.innerText = `${ping.amount}`;
+        damagePreEl.style.color = FontColors[ping.attribute];
+        damagePreEl.innerText = numberWithCommas(ping.amount);
+
+        const damagePostEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post'))[0];
+        damagePostEl.style.color = FontColors[ping.attribute];
+        damagePostEl.innerText = numberWithCommas(ping.rawDamage);
+        if (ping.rawDamage != ping.actualDamage) {
+          damagePostEl.innerText += ` (${numberWithCommas(ping.actualDamage)})`;
+        }
       }
     }
 
     const totalBaseStatEl = document.getElementById('idc-stat-base-6');
     totalBaseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `HP: ${this.getHp()}`;
     totalBaseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `RCV: ${this.getRcv()}`;
+
+    const totalPreDamageEl = document.getElementById('idc-stat-damage-pre-total');
+    totalPreDamageEl.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.amount, 0));
+    const totalPostDamageEl = document.getElementById('idc-stat-damage-post-total');
+    totalPostDamageEl.innerText = `${numberWithCommas(pings.reduce((total, ping) => total + ping.rawDamage, 0))} (${numberWithCommas(enemy.currentHp - currentHp)})`;
   }
 
   createMonsterSelector() {
     const maxResults = 15;
     const monsterSelection = document.createElement('div');
-    const monsterSelector = document.createElement('input'); // TODO: Make this input better.
+    const monsterSelector = document.createElement('input');
     monsterSelector.style.width = '100%';
     monsterSelector.placeholder = 'Monster Search';
     const options = document.createElement('div');
@@ -2905,6 +3562,9 @@ class Idc {
         option.style.display = 'none';
       }
     }
+    monsterSelection.onblur = () => {
+      options.style.display = 'none';
+    }
     monsterSelection.appendChild(monsterSelector);
     monsterSelection.appendChild(document.createElement('br'));
     monsterSelection.appendChild(options);
@@ -2914,7 +3574,6 @@ class Idc {
   createInheritSelector() {
     const maxResults = 15;
     const inheritSelection = document.createElement('div');
-    // inheritSelection.appendChild(document.createTextNode('Inherit: '));
     const inheritSelector = document.createElement('input');
     inheritSelector.style.width = '100%';
     inheritSelector.placeholder = 'Inherit Search';
@@ -2969,6 +3628,9 @@ class Idc {
         const option = document.getElementById(`idc-inherit-select-option-${i}`);
         option.style.display = 'none';
       }
+    }
+    inheritSelection.onblur = () => {
+      options.style.display = 'none';
     }
     inheritSelector.id = 'idc-selector-inherit';
     inheritSelection.appendChild(inheritSelector);
@@ -3258,10 +3920,15 @@ class Idc {
     monsterTabChooser.style.borderBottom = '';
     monsterTabChooser.style.cursor = '';
     document.getElementById('idc-monster-editor').style.display = '';
+
     const comboTabChooser = document.getElementById('idc-tab-combo');
     comboTabChooser.style.borderBottom = BORDER_COLOR;
     comboTabChooser.style.cursor = 'pointer';
     document.getElementById('idc-combo-editor').style.display = 'none';
+    const dungeonTabChooser = document.getElementById('idc-tab-dungeon');
+    dungeonTabChooser.style.borderBottom = BORDER_COLOR;
+    dungeonTabChooser.style.cursor = 'pointer';
+    document.getElementById('idc-dungeon-editor').style.display = 'none';
   }
 
   chooseComboTab() {
@@ -3269,10 +3936,32 @@ class Idc {
     comboTabChooser.style.borderBottom = '';
     comboTabChooser.style.cursor = '';
     document.getElementById('idc-combo-editor').style.display = '';
+
     const monsterTabChooser = document.getElementById('idc-tab-monster');
     monsterTabChooser.style.borderBottom = BORDER_COLOR;
     monsterTabChooser.style.cursor = 'pointer';
     document.getElementById('idc-monster-editor').style.display = 'none';
+    const dungeonTabChooser = document.getElementById('idc-tab-dungeon');
+    dungeonTabChooser.style.borderBottom = BORDER_COLOR;
+    dungeonTabChooser.style.cursor = 'pointer';
+    document.getElementById('idc-dungeon-editor').style.display = 'none';
+  }
+
+  chooseDungeonTab() {
+    const dungeonTabChooser = document.getElementById('idc-tab-dungeon');
+    dungeonTabChooser.style.borderBottom = '';
+    dungeonTabChooser.style.cursor = '';
+    document.getElementById('idc-dungeon-editor').style.display = '';
+
+    const comboTabChooser = document.getElementById('idc-tab-combo');
+    comboTabChooser.style.borderBottom = BORDER_COLOR;
+    comboTabChooser.style.cursor = 'pointer';
+    document.getElementById('idc-combo-editor').style.display = 'none';
+    const monsterTabChooser = document.getElementById('idc-tab-monster');
+    monsterTabChooser.style.borderBottom = BORDER_COLOR;
+    monsterTabChooser.style.cursor = 'pointer';
+    document.getElementById('idc-monster-editor').style.display = 'none';
+
   }
 
   createLayoutLeft() {
@@ -3283,28 +3972,39 @@ class Idc {
     const debugButton = document.createElement('button');
     debugButton.innerText = 'DEBUG';
     debugButton.onclick = () => {
-      const mp = this.isMultiplayer();
-      console.log(`Team HP: ${this.getHp()}`);
-      for (const monster of this.getActiveTeam()) {
-        console.log(monster.getCard().name);
-        console.log(`HP: ${monster.getHp(mp)} ATK: ${monster.getAtk(mp)} RCV: ${monster.getRcv(mp)}`);
+      // const mp = this.isMultiplayer();
+      // console.log(`Team HP: ${this.getHp()}`);
+      // for (const monster of this.getActiveTeam()) {
+      //   console.log(monster.getCard().name);
+      //   console.log(`HP: ${monster.getHp(mp)} ATK: ${monster.getAtk(mp)} RCV: ${monster.getRcv(mp)}`);
+      // }
+      // console.log(this.getDamagePre());
+      console.log(this.toPdchu());
+
+      const pings = this.getDamagePre().pings
+      for (const ping of pings) {
+        console.log(ping.source.getCard().name);
+        console.log(ping.amount);
+        console.log(this.dungeon.getActiveEnemy().calcDamage(ping, pings, this.combos, this.isMultiplayer()));
       }
-      console.log(this.getDamagePre());
     }
 
     layoutLeft.appendChild(debugButton);
 
     const monsterEditorElement = this.createMonsterEditor();
-    const comboElement = this.combos.createElement(this);
-    comboElement.style.display = 'none';
+    const comboEditorElement = this.combos.createElement(this);
+    const dungeonEditorElement = this.dungeon.createEditorElement();
+    comboEditorElement.style.display = 'none';
+    dungeonEditorElement.style.display = 'none';
 
     const tabChooser = document.createElement('table');
     tabChooser.style.width = '100%';
     const tabRow = document.createElement('tr');
     const monsterTabChooser = document.createElement('td');
     const comboTabChooser = document.createElement('td');
+    const dungeonTabChooser = document.createElement('td');
     monsterTabChooser.id = 'idc-tab-monster';
-    monsterTabChooser.innerText = 'Monster Editor';
+    monsterTabChooser.innerText = 'Monster';
     monsterTabChooser.style.padding = '5px';
     monsterTabChooser.style.borderLeft = BORDER_COLOR;
     monsterTabChooser.style.borderTop = BORDER_COLOR;
@@ -3313,7 +4013,7 @@ class Idc {
     monsterTabChooser.onclick = () => this.chooseMonsterTab();
     tabRow.appendChild(monsterTabChooser);
     comboTabChooser.id = 'idc-tab-combo';
-    comboTabChooser.innerText = 'Combo Editor';
+    comboTabChooser.innerText = 'Combo';
     comboTabChooser.style.cursor = 'pointer';
     comboTabChooser.style.padding = '5px';
     comboTabChooser.style.borderLeft = BORDER_COLOR;
@@ -3322,11 +4022,22 @@ class Idc {
     comboTabChooser.style.borderBottom = BORDER_COLOR;
     comboTabChooser.onclick = () => this.chooseComboTab();
     tabRow.appendChild(comboTabChooser);
+    dungeonTabChooser.id = 'idc-tab-dungeon';
+    dungeonTabChooser.innerText = 'Dungeon';
+    dungeonTabChooser.style.cursor = 'pointer';
+    dungeonTabChooser.style.padding = '5px';
+    dungeonTabChooser.style.borderLeft = BORDER_COLOR;
+    dungeonTabChooser.style.borderTop = BORDER_COLOR;
+    dungeonTabChooser.style.borderRight = BORDER_COLOR;
+    dungeonTabChooser.style.borderBottom = BORDER_COLOR;
+    dungeonTabChooser.onclick = () => this.chooseDungeonTab();
+    tabRow.appendChild(dungeonTabChooser);
     tabChooser.appendChild(tabRow);
 
     layoutLeft.appendChild(tabChooser);
     layoutLeft.appendChild(monsterEditorElement);
-    layoutLeft.appendChild(comboElement);
+    layoutLeft.appendChild(comboEditorElement);
+    layoutLeft.appendChild(dungeonEditorElement);
 
     return layoutLeft;
   }
@@ -3423,22 +4134,27 @@ class Idc {
     }
     layoutRight.appendChild(hpPercentInput);
 
-    // 7 columns showing stats of the currently active team.
+    // 7 rows showing stats of the currently active team.
     const statDisplayEl = document.createElement('table');
     statDisplayEl.id = 'idc-stat-display';
     statDisplayEl.style.fontSize = 'small';
-    const iconRow = document.createElement('tr');
+    for (let i = 0; i < 7; i++) {
+      const row = document.createElement('tr');
+      statDisplayEl.appendChild(row);
+    }
+    const rows = statDisplayEl.getElementsByTagName('tr');
+    // const iconRow = document.createElement('tr');
     for (let i = 0; i < 7; i++) {
       const statIconContainer = document.createElement('td');
       statIconContainer.id = `idc-stat-icon-${i}`;
       if (i == 6) {
         statIconContainer.innerText = 'Total';
       }
-      iconRow.appendChild(statIconContainer);
+      rows[i].appendChild(statIconContainer);
     }
-    statDisplayEl.appendChild(iconRow);
+    // statDisplayEl.appendChild(iconRow);
     // Includes HP, ATK, RCV of the current team..
-    const baseStatRow = document.createElement('tr');
+    // const baseStatRow = document.createElement('tr');
     for (let i = 0; i < 7; i++) {
       const statContainer = document.createElement('td');
       statContainer.id = `idc-stat-base-${i}`;
@@ -3457,13 +4173,14 @@ class Idc {
       statContainer.appendChild(atkEl);
       statContainer.appendChild(rcvEl)
 
-      baseStatRow.appendChild(statContainer);
+      rows[i].appendChild(statContainer);
     }
-    statDisplayEl.appendChild(baseStatRow);
-    const preDamageRow = document.createElement('tr');
+    // statDisplayEl.appendChild(baseStatRow);
+    // const preDamageRow = document.createElement('tr');
     for (let i = 0; i < 7; i++) {
       const preDamageContainer = document.createElement('td');
       preDamageContainer.id = `idc-stat-damage-pre-${i}`;
+      preDamageContainer.style.textAlign = 'right';
       if (i < 6) {
         const mainAttr = document.createElement('div');
         mainAttr.className = 'idc-stat-damage-pre-main';
@@ -3475,10 +4192,38 @@ class Idc {
         preDamageContainer.appendChild(subAttr);
       } else {
         // TODO: Total value.
+        const totalEl = document.createElement('div');
+        totalEl.id = 'idc-stat-damage-pre-total';
+        totalEl.innerText = '0';
+        preDamageContainer.appendChild(totalEl);
       }
-      preDamageRow.appendChild(preDamageContainer);
+      rows[i].appendChild(preDamageContainer);
     }
-    statDisplayEl.appendChild(preDamageRow);
+    // statDisplayEl.appendChild(preDamageRow);
+
+    // const postDamageRow = document.createElement('tr');
+    for (let i = 0; i < 7; i++) {
+      const postDamageContainer = document.createElement('td');
+      postDamageContainer.id = `idc-stat-damage-post-${i}`;
+      postDamageContainer.style.textAlign = 'right';
+      if (i < 6) {
+        const mainAttr = document.createElement('div');
+        mainAttr.className = 'idc-stat-damage-post-main';
+        mainAttr.innerText = '0';
+        postDamageContainer.appendChild(mainAttr)
+        const subAttr = document.createElement('div');
+        subAttr.className = 'idc-stat-damage-post-sub';
+        subAttr.innerText = '0';
+        postDamageContainer.appendChild(subAttr);
+      } else {
+        const totalEl = document.createElement('div');
+        totalEl.id = 'idc-stat-damage-post-total';
+        totalEl.innerText = '0';
+        postDamageContainer.appendChild(totalEl);
+      }
+      rows[i].appendChild(postDamageContainer);
+    }
+    // statDisplayEl.appendChild(postDamageRow);
     // SB
     // OEs + Rows
     // Hazards (Poison, jammer, blind, SBR)
@@ -3491,6 +4236,9 @@ class Idc {
     // const timeRow = document.createElement('tr');
     // Autoheal
     layoutRight.appendChild(statDisplayEl);
+
+    const battleEl = this.dungeon.createBattleElement();
+    layoutRight.appendChild(battleEl);
 
     return layoutRight;
   }
