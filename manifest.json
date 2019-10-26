@@ -1,6 +1,6 @@
 {
   "name": "Valeria's Combat Trainer",
-  "version": "0.2",
+  "version": "0.3",
   "description": "Hijack Ilmina's library for training purposes.",
   "manifest_version": 2,
   "permissions": ["activeTab", "tabs", "<all_urls>"],

@@ -78,9 +78,9 @@ const LatentToPdchu = new Map([
   [Latent.HP, 'hp'],
   [Latent.ATK, 'atk'],
   [Latent.RCV, 'rcv'],
-  [Latent.HP, 'hp+'],
-  [Latent.ATK, 'atk+'],
-  [Latent.RCV, 'rcv+'],
+  [Latent.HP_PLUS, 'hp+'],
+  [Latent.ATK_PLUS, 'atk+'],
+  [Latent.RCV_PLUS, 'rcv+'],
   [Latent.TIME, 'te'],
   [Latent.TIME_PLUS, 'te+'],
   [Latent.AUTOHEAL, 'ah'],
@@ -108,8 +108,9 @@ const LatentToPdchu = new Map([
   [Latent.ATTACKER, 'aak'],
   [Latent.PHYSICAL, 'phk'],
   [Latent.HEALER, 'hek'],
+]);
 
-  ]);
+const PdchuToLatent = new Map([...LatentToPdchu.entries()].map((entry) => [entry[1], entry[0]]));
 
 const LATENT_HP = new Map([
   [Latent.HP, 0.015],
@@ -334,13 +335,169 @@ class MonsterInstance {
       string += '[' + this.latents.map((latent) => LatentToPdchu.get(latent)).join(',') + ']';
     }
 
-    string += ` | lv${this.level} aw${this.awakenings} +H${this.hpPlus} +A${this.atkPlus} +R${this.rcvPlus}`;
+    string += ` | lv${this.level} aw${this.awakenings}`;
+    if (this.hpPlus != 99 || this.atkPlus != 99 || this.rcvPlus != 99) {
+      string += ` +H${this.hpPlus} +A${this.atkPlus} +R${this.rcvPlus}`;
+    }
 
     if (this.superAwakeningIdx >= 0) {
       string += ` sa${this.superAwakeningIdx + 1}`;
     }
     return string;
   }
+
+  fromPdchu(string) {
+    let s = string.trim().toLowerCase();
+    let monsterId = -1;
+    let assistId = -1;
+    let assistPlussed = false;
+    let assistLevel = 1;
+    let latents = [];
+    let hpPlus = 99;
+    let atkPlus = 99;
+    let rcvPlus = 99;
+    let awakeningLevel = 9;
+    let superAwakeningIdx = -1;
+    let level = 99;
+
+    let monsterName = '';
+    if (s.startsWith('"')) {
+      const endQuoteIdx = s.indexOf('"', 1);
+      if (endQuoteIdx == -1) {
+        return 'Monster needs end quote.';
+      }
+      monsterName = s.substring(1, endQuoteIdx).trim();
+      s = s.substring(endQuoteIdx + 1).trim();
+    } else {
+      let endIdx = s.length;
+      if (s.includes('(')) {
+        endIdx = s.indexOf('(');
+      } else if (s.includes('[')) {
+        endIdx = s.indexOf('[');
+      } else if (s.includes('|')) {
+        endIdx = s.indexOf('|');
+      }
+      monsterName = s.substring(0, endIdx).trim();
+      s = s.substring(endIdx).trim();
+    }
+
+    // Handle assist.
+    let assistName = '';
+    if (s.startsWith('(')) {
+      if (s[1] == '"') {
+        const endQuoteIdx = s.indexOf('"', 1);
+        if (endQuoteIdx == -1) {
+          return 'Assist needs end quote';
+        }
+        assistName = s.substring(1, endQuoteIdx).trim();
+        s = s.substring(endQuoteIdx + 1);
+      } else {
+        let endIdx = s.indexOf(')');
+        if (s.substring(1, endIdx).includes('|')) {
+          endIdx = s.indexOf('|');
+        }
+        assistName = s.substring(1, endIdx).trim();
+        s = s.substring(endIdx); // Will start with either ) or |
+      }
+      if (s.startsWith('|')) {
+        const assistStatSubstring = s.substring(0, s.indexOf(')'));
+        const lvMatch = assistStatSubstring.match(/lv\d+/);
+        if (lvMatch) {
+          assistLevel = Number(lvMatch[0].substring(2));
+        }
+        const plusMatch = assistStatSubstring.match(/\+297/);
+        if (plusMatch) {
+          assistPlussed = true;
+        }
+      }
+      s = s.substring(s.indexOf(')') + 1).trim();
+    }
+
+    // Handle latents
+    if (s.startsWith('[')) {
+      const latentString = s.substring(1, s.indexOf(']'));
+      s = s.substring(latentString.length + 2).trim();
+
+      const latentPieces = latentString.split(',').map((piece) => piece.trim()).filter((a) => !!a);
+      for (const piece of latentPieces) {
+        const latentName = piece.match(/\w+\+?/)[0];
+        const latent = PdchuToLatent.get(latentName);
+        if (latent == undefined) {
+          continue;
+        }
+        if (piece.includes('*')) {
+          for (let i = 0; i < Number(piece[piece.length - 1]); i++) {
+            latents.push(latent)
+          }
+        } else {
+          latents.push(latent);
+        }
+      }
+    }
+
+    // Handle Stats.
+    if (s.startsWith('|')) {
+      const saMatch = s.match(/sa\d/);
+      if (saMatch) {
+        superAwakeningIdx = Number(saMatch[0].substring(2)) - 1;
+        level = 110;
+      }
+      const lvMatch = s.match(/lv\d+/);
+      if (lvMatch) {
+        level = Number(lvMatch[0].substring(2));
+      }
+      const awakeningMatch = s.match(/aw\d/)
+      if (awakeningMatch) {
+        awakeningLevel = Number(awakeningMatch[0].substring(2));
+      }
+      const plusMatch = s.match(/\+0/);
+      if (plusMatch) {
+        hpPlus = 0;
+        atkPlus = 0;
+        rcvPlus = 0;
+      }
+      const plusHpMatch = s.match(/\+h\d+/);
+      if (plusHpMatch) {
+        hpPlus = Number(plusHpMatch[0].substring(2));
+      }
+      const plusAtkMatch = s.match(/\+a\d+/);
+      if (plusAtkMatch) {
+        atkPlus = Number(plusAtkMatch[0].substring(2));
+      }
+      const plusRcvMatch = s.match(/\+r\d+/);
+      if (plusRcvMatch) {
+        rcvPlus = Number(plusRcvMatch[0].substring(2));
+      }
+    }
+
+    const bestGuessIds = fuzzyMonsterSearch(monsterName, 1, prioritizedMonsterSearch);
+    if (bestGuessIds.length == 0) {
+      return 'No monsters matched';
+    }
+
+    this.inheritPlussed = assistPlussed;
+    this.inheritLevel = assistLevel;
+    this.latents.length = 0;
+    this.awakenings = awakeningLevel;
+    this.setId(bestGuessIds[0]);
+    this.superAwakeningIdx = superAwakeningIdx;
+    this.setLevel(level);
+    for (const latent of latents) {
+      this.addLatent(latent);
+    }
+    this.setHpPlus(hpPlus);
+    this.setAtkPlus(atkPlus);
+    this.setRcvPlus(rcvPlus);
+    if (assistName) {
+      const bestGuessInheritIds = fuzzyMonsterSearch(assistName, 1);
+      if (bestGuessInheritIds.length == 0) {
+        console.warn('No inherits matched');
+      } else {
+        this.inheritId = bestGuessInheritIds[0];
+      }
+    }
+  }
+
 
   copyFrom(otherInstance) {
     this.id = otherInstance.id;
@@ -1389,6 +1546,7 @@ EnemyInstance.fromJson = (json) =>{
   instance.skillsets = json.skillsets.map(
       (skillsetJson) => EnemySkillset.fromJson(skillsetJson));
   instance.turnCounter = json.turnCount;
+  instance.reset();
   return instance;
 };
 
@@ -1405,26 +1563,51 @@ class DungeonFloor {
     const el = document.createElement('tr');
     el.id = `idc-dungeon-floor-${idx}`;
 
-    const floorName = document.createElement('td');
+    const floorCell = document.createElement('td');
+    const floorName = document.createElement('div');
     floorName.innerText = `F${idx + 1}`;
     floorName.style.minWidth = '25px';
-    el.appendChild(floorName);
+    floorCell.appendChild(floorName);
+    const addMonster = document.createElement('div');
+    addMonster.className = 'idc-dungeon-floor-add-enemy';
+    addMonster.innerText = '[+]';
+    addMonster.onmouseover = () => {
+      addMonster.style.border = BORDER_COLOR;
+    };
+    addMonster.onmouseleave = () => {
+      addMonster.style.border = '';
+    };
+    addMonster.onclick = () => {
+      this.enemies.length += 1;
+      this.activeEnemy = this.enemies.length - 1;
+      this.enemies[this.activeEnemy] = new EnemyInstance();
+    }
+    floorCell.appendChild(addMonster);
+    el.appendChild(floorCell);
 
     const enemies = document.createElement('td');
-    enemies.className = 'idc-dungeon-floor-enemies';
-
+    const enemiesTable = document.createElement('table');
+    enemiesTable.className = 'idc-dungeon-floor-enemies';
+    enemiesTable.style.fontSize = 'x-small';
     for (let i = 0; i < this.enemies.length; i++) {
-      const enemyEl = document.createElement('div');
+      const enemyRow = document.createElement('tr');
+      enemyRow.className = 'idc-dungeon-floor-enemy';
+
       const enemy = this.enemies[i];
+      const enemyEl = document.createElement('td');
       enemyEl.innerText = `${enemy.getName()}`;
       enemyEl.onclick = () => {
         this.activeEnemy = i;
-      }
+      };
       if (isSelected && i == this.activeEnemy) {
         enemyEl.style.border = BORDER_COLOR;
       }
-      enemies.appendChild(enemyEl);
+      enemyRow.appendChild(enemyEl);
+
+      // TODO: Add delete enemy here.
+      enemiesTable.appendChild(enemyRow);
     }
+    enemies.appendChild(enemiesTable);
     el.appendChild(enemies);
     const deleteEl = document.createElement('td');
     deleteEl.className = 'idc-dungeon-floor-delete';
@@ -1434,15 +1617,19 @@ class DungeonFloor {
   }
 
   reloadEditorElement(el, isSelected) {
-    const enemyEls = el.getElementsByClassName('idc-dungeon-floor-enemies');
-    for (let i = 0; i < this.enemies.length || i < enemyEls.length; i++) {
+    const enemyTable = el.getElementsByClassName('idc-dungeon-floor-enemies')[0];
+    const enemyRows = [...enemyTable.getElementsByClassName('idc-dungeon-floor-enemy')];
+    for (let i = 0; i < this.enemies.length || i < enemyRows.length; i++) {
       if (i >= this.enemies.length) {
-        enemyEls[i].style.display = 'none';
+        enemyRows[i].style.display = 'none';
         continue;
       }
-      if (i >= enemyEls.length) {
-        const enemyEl = document.createElement('div');
+      if (i >= enemyRows.length) {
+        const enemyRow = document.createElement('tr');
+        enemyRow.className = 'idc-dungeon-floor-enemy';
         const enemy = this.enemies[i];
+
+        const enemyEl = document.createElement('td');
         enemyEl.innerText = `${enemy.getName()}`;
         enemyEl.onclick = () => {
           this.activeEnemy = i;
@@ -1450,20 +1637,22 @@ class DungeonFloor {
         if (isSelected && i == this.activeEnemy) {
           enemyEl.style.border = BORDER_COLOR;
         }
-        el.appendChild(enemyEl);
-        const deleteEl = document.createElement('td');
-        deleteEl.className = 'idc-dungeon-floor-delete';
-        deleteEl.innerText = '[X]';
-        el.appendChild(deleteEl);
+        enemyRow.appendChild(enemyEl);
+        enemyTable.appendChild(enemyRow);
+        // const deleteEl = document.createElement('td');
+        // deleteEl.className = 'idc-dungeon-floor-delete';
+        // deleteEl.innerText = '[X]';
+        // el.appendChild(deleteEl);
         continue;
       }
-      enemyEls[i].innerText = `${this.enemies[i].getName()}`;
+      const enemyEl = enemyRows[i].getElementsByTagName('td')[0];
+      enemyEl.innerText = `${this.enemies[i].getName()}`;
       if (isSelected && i == this.activeEnemy) {
-        enemyEls[i].style.border = BORDER_COLOR;
+        enemyEl.style.border = BORDER_COLOR;
       } else {
-        enemyEls[i].style.border = '';
+        enemyEl.style.border = '';
       }
-      enemyEls[i].display = '';
+      enemyRows[i].display = '';
     }
   }
 
@@ -1519,6 +1708,9 @@ class DungeonInstance {
       return;
     }
     this.floors.splice(idx, 1);
+    if (this.activeFloor == idx) {
+      this.activeFloor--;
+    }
     this.reloadEditorElement();
     this.reloadBattleElement();
   }
@@ -1595,20 +1787,25 @@ class DungeonInstance {
     const dungeonContainer = document.createElement('div');
     dungeonContainer.id = 'idc-dungeon-editor';
     dungeonContainer.style.padding = '5px';
-    dungeonContainer.style.borderLeft = BORDER_COLOR;
-    dungeonContainer.style.borderRight = BORDER_COLOR;
     const titleSetter = document.createElement('input');
     titleSetter.id = 'idc-dungeon-editor-title'
+    titleSetter.width = '100%';
     titleSetter.onkeyup = () => {
       this.title = titleSetter.value;
     };
     dungeonContainer.appendChild(titleSetter);
 
-    const floorAdder = document.createElement('a');
+    const floorAdder = document.createElement('div');
     floorAdder.id = 'idc-dungeon-editor-addfloor';
     floorAdder.innerText = 'Add Floor';
     floorAdder.onclick = () => {
       this.addFloor();
+    };
+    floorAdder.onmouseover = () => {
+      floorAdder.style.border = BORDER_COLOR;
+    };
+    floorAdder.onmouseleave = () => {
+      floorAdder.style.border = '';
     };
     dungeonContainer.appendChild(floorAdder);
 
@@ -1747,29 +1944,24 @@ class DungeonInstance {
   }
 
   reloadEditorElement() {
+    document.getElementById('idc-dungeon-editor-title').value = this.title;
     const floorsEditor = document.getElementById('idc-dungeon-editor-floors');
-    const floorRows = floorsEditor.getElementsByTagName('tr');
+    while (floorsEditor.firstChild) {
+      floorsEditor.removeChild(floorsEditor.firstChild);
+    }
 
     for (let i = 0; i < this.floors.length; i++) {
-      if (floorRows.length <= i) {
-        const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
-        floorEditor.onclick = () => {
-          this.activeFloor = i;
-          this.reloadEditorElement();
-          this.reloadBattleElement();
-        }
-        floorsEditor.appendChild(floorEditor);
-        const floorDelete = floorEditor.getElementsByClassName('idc-dungeon-floor-delete')[0];
-        floorDelete.onclick = () => {
-          this.deleteFloor(i);
-        }
-        continue;
+      const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
+      floorEditor.onclick = () => {
+        this.activeFloor = i;
+        this.reloadEditorElement();
+        this.reloadBattleElement();
       }
-      this.floors[i].reloadEditorElement(floorRows[i], i == this.activeFloor);
-      floorRows[i].style.display = '';
-    }
-    for (let i = this.floors.length; i < floorRows.length; i++) {
-      floorRows[i].style.display = 'none';
+      floorsEditor.appendChild(floorEditor);
+      const floorDelete = floorEditor.getElementsByClassName('idc-dungeon-floor-delete')[0];
+      floorDelete.onclick = () => {
+        this.deleteFloor(i);
+      }
     }
 
     const enemy = this.getActiveEnemy();
@@ -1779,7 +1971,7 @@ class DungeonInstance {
     document.getElementById('idc-enemy-defense').value = enemy.defense;
     document.getElementById('idc-enemy-resolve').value = enemy.resolvePercent;
     for (const el of document.getElementsByClassName('idc-enemy-resist-attributes')) {
-      el.checked = enemy.attributesResisted.includes(el.value);
+      el.checked = enemy.attributesResisted.includes(Number(el.value));
     }
   }
 
@@ -1818,6 +2010,9 @@ class DungeonInstance {
   loadJson(json) {
     this.title = json.title;
     this.floors = json.floors.map((floor) => DungeonFloor.fromJson(floor));
+    this.activeFloor = 0;
+    this.reloadEditorElement();
+    this.reloadBattleElement();
   }
 }
 
@@ -2006,8 +2201,6 @@ class ComboContainer {
   createElement(idc) {
     const el = document.createElement('div');
     el.style.padding = '5px';
-    el.style.borderLeft = BORDER_COLOR;
-    el.style.borderRight = BORDER_COLOR;
 
     el.id = 'idc-combo-editor';
     const inputEl = document.createElement('input');
@@ -2386,6 +2579,76 @@ class ComboContainer {
   }
 }
 
+class TabbedComponent {
+  constructor(tabNames, defaultTab = undefined) {
+    if (!defaultTab || !tabNames.includes(defaultTab)) {
+      defaultTab = tabNames[0];
+    }
+    // Overall containing div.
+    this.element_ = document.createElement('div');
+
+    this.tabNames_ = [...tabNames];
+
+    this.labelTable_ = document.createElement('table');
+    this.labelTable_.style.width = '100%';
+    this.labelRow_ = document.createElement('tr');
+    this.labelTable_.appendChild(this.labelRow_);
+    this.element_.appendChild(this.labelTable_);
+
+    this.tabLabelEls_ = {};
+    this.tabEls_ = {};
+
+    for (const tabName of tabNames) {
+      const label = document.createElement('td');
+      label.innerText = tabName;
+      label.style.borderLeft = BORDER_COLOR;
+      label.style.borderTop = BORDER_COLOR;
+      label.style.borderRight = BORDER_COLOR;
+      if (defaultTab != tabName) {
+        label.style.borderBottom = BORDER_COLOR;
+        label.style.cursor = 'pointer';
+      }
+      label.onclick = () => this.setActiveTab(tabName);
+      this.labelRow_.appendChild(label);
+      this.tabLabelEls_[tabName] = label;
+
+      const tab = document.createElement('div');
+      tab.style.borderLeft = BORDER_COLOR;
+      tab.style.borderRight = BORDER_COLOR;
+      tab.style.borderBottom = BORDER_COLOR;
+      if (defaultTab != tabName) {
+        tab.style.display = 'none';
+      }
+      this.element_.appendChild(tab);
+      this.tabEls_[tabName] = tab;
+    }
+  }
+
+  getElement() {
+    return this.element_;
+  }
+
+  setActiveTab(tabNameToActivate) {
+    for (const tabName of this.tabNames_) {
+      const label = this.tabLabelEls_[tabName];
+      const tab = this.tabEls_[tabName];
+      if (tabName == tabNameToActivate) {
+        label.style.borderBottom = '';
+        label.style.cursor = '';
+        tab.style.display = '';
+      } else {
+        label.style.borderBottom = BORDER_COLOR;
+        label.style.cursor = 'pointer';
+        tab.style.display = 'none';
+      }
+    }
+  }
+
+  getTab(tabName) {
+    return this.tabEls_[tabName];
+  }
+}
+
 // To be loaded.
 let prioritizedMonsterSearch;
 let prioritizedInheritSearch;
@@ -2395,6 +2658,12 @@ function loadMonsterSearches() {
   prioritizedMonsterSearch = Object.values(vm.model.cards).filter((card) => {
     return Number(card.id) < 6000;
   }).sort((card1, card2) => {
+    if (card2.awakenings[0] == IdcAwakening.AWOKEN_ASSIST) {
+      return -1;
+    }
+    if (card1.awakenings[0] == IdcAwakening.AWOKEN_ASSIST) {
+      return 1;
+    }
     if (card2.monsterPoints != card1.monsterPoints) {
       return card2.monsterPoints - card1.monsterPoints;
     }
@@ -2405,7 +2674,8 @@ function loadMonsterSearches() {
     // 1, 4, and 5 are unknown
     // 0 is none
     // 2 and 6 are unassistable.
-    return card.inheritanceType == 3 || card.inheritanceType == 7;
+    // return card.inheritanceType == 3 || card.inheritanceType == 7;
+    return true;
   }).sort((card1, card2) => {
     if (card1.awakenings[0] != card2.awakenings[0]) {
       if (card1.awakenings[0] == IdcAwakening.AWOKEN_ASSIST) {
@@ -2425,6 +2695,9 @@ function loadMonsterSearches() {
     for (const alias of group.aliases.filter(
         (alias) => alias.indexOf(' ') == -1 && alias == alias.toLowerCase())) {
       prefixToCardIds[alias] = group.cards;
+      if (alias == 'halloween') {
+        prefixToCardIds['h'] = group.cards;
+      }
     }
   }
 }
@@ -2643,7 +2916,7 @@ class StoredTeams {
   }
 
   saveDungeon(dungeonJson) {
-    this.dungeons[dungeonJson.name] = dungeonJson;
+    this.dungeons[dungeonJson.title] = dungeonJson;
     window.localStorage.idcStoredDungeons = JSON.stringify(this.dungeons);
   }
 
@@ -2663,19 +2936,20 @@ class StoredTeams {
 
   createElement(idc) {
     const el = document.createElement('div');
+    el.style.padding = '5px';
     el.id = 'idc-save-load';
-    const saveEl = document.createElement('div');
-    saveEl.id = 'idc-save-team';
-    saveEl.innerText = 'Save Team';
-    saveEl.style.fontSize = 'large';
-    saveEl.onmouseover = () => saveEl.style.border = BORDER_COLOR;
-    saveEl.onmouseleave = () => saveEl.style.border = '';
+    const saveTeamEl = document.createElement('div');
+    saveTeamEl.id = 'idc-save-team';
+    saveTeamEl.innerText = 'Save Team';
+    saveTeamEl.style.fontSize = 'large';
+    saveTeamEl.onmouseover = () => saveTeamEl.style.border = BORDER_COLOR;
+    saveTeamEl.onmouseleave = () => saveTeamEl.style.border = '';
 
-    saveEl.onclick = () => {
-      idc.save();
+    saveTeamEl.onclick = () => {
+      idc.saveTeam();
       this.reload(idc);
     }
-    el.appendChild(saveEl);
+    el.appendChild(saveTeamEl);
     for (const teamName in this.teams) {
       const teamEl = document.createElement('div');
       const loadEl = document.createElement('div');
@@ -2699,8 +2973,46 @@ class StoredTeams {
       teamEl.appendChild(deleteEl);
       el.appendChild(teamEl);
     }
+
+    const saveDungeonEl = document.createElement('div');
+    saveDungeonEl.id = 'idc-save-dungeon';
+    saveDungeonEl.innerText = 'Save Dungeon';
+    saveDungeonEl.style.fontSize = 'large';
+    saveDungeonEl.style.paddingTop = '10px';
+    saveDungeonEl.onmouseover = () => saveDungeonEl.style.border = BORDER_COLOR;
+    saveDungeonEl.onmouseleave = () => saveDungeonEl.style.border = '';
+
+    saveDungeonEl.onclick = () => {
+      idc.saveDungeon();
+      this.reload(idc);
+    }
+    el.appendChild(saveDungeonEl);
+    for (const dungeonName in this.dungeons) {
+      const dungeonEl = document.createElement('div');
+      const loadEl = document.createElement('div');
+      loadEl.innerText = dungeonName;
+      loadEl.style.width = '95%';
+      loadEl.style.display = 'inline-block';
+      loadEl.onmouseover = () => loadEl.style.border = BORDER_COLOR;
+      loadEl.onmouseleave = () => loadEl.style.border = '';
+      loadEl.onclick = () => {
+        idc.dungeon.loadJson(this.dungeons[dungeonName]);
+      }
+      dungeonEl.appendChild(loadEl);
+      const deleteEl = document.createElement('a');
+      deleteEl.innerText = 'x';
+      deleteEl.onmouseover = () => deleteEl.style.border = BORDER_COLOR;
+      deleteEl.onmouseleave = () => deleteEl.style.border = '';
+      deleteEl.onclick = () => {
+        this.deleteDungeon(dungeonName);
+        this.reload(idc);
+      }
+      dungeonEl.appendChild(deleteEl);
+      el.appendChild(dungeonEl);
+    }
     return el;
   }
+
 }
 
 class DamagePing {
@@ -2710,6 +3022,10 @@ class DamagePing {
     this.amount = 0;
     this.vdp = false;
     this.isSub = isSub;
+    // Damage done to monster after considering attr, type, killers, resists, voids, absorbs.
+    this.rawDamage = null;
+    // Damage done to monster after considering max HP and min HP.
+    this.actualDamage = null;
   }
 
   add(amount) {
@@ -2816,6 +3132,52 @@ class Idc {
     return '';
   }
 
+  fromPdchu(string) {
+    const teamStrings = string.split(';');
+    // We don't support >3P.
+    if (teamStrings.length > 3) {
+      teamStrings.length = 3;
+    }
+    this.setPlayerMode(teamStrings.length);
+    for (let i = 0; i < teamStrings.length; i++) {
+      const multiplierRegex = /\*\s*\d$/;
+      let monsterStrings = teamStrings[i].split('/')
+          .map((s) => s.trim())
+          .reduce((allStrings, monsterString) => {
+            const multiply = monsterString.match(multiplierRegex);
+            let count = 1;
+            if (multiply) {
+              count = Number(multiply[0][multiply[0].length - 1]);
+              monsterString = monsterString.substring(0, multiply.index);
+            }
+            for (let j = 0; j < count; j++) {
+              allStrings = allStrings.concat([monsterString])
+            }
+            return allStrings;
+          }, []);
+      if (this.playerMode == 2) {
+        if (monsterStrings.length > 5) {
+          monsterStrings.length = 5;
+        }
+        while(monsterStrings.length < 5) {
+          monsterStrings.push('1929');
+        }
+      } else {
+        if (monsterStrings.length > 6) {
+          monsterStrings.length = 6;
+        }
+        while(monsterStrings.length < 6) {
+          monsterStrings.push('1929');
+        }
+      }
+
+      const team = this.getTeamAt(i);
+      for (let j = 0; j < monsterStrings.length; j++) {
+        team[j].fromPdchu(monsterStrings[j]);
+      }
+    }
+  }
+
   getHpPercent() {
     return this.hpPercent;  // TODO: Make this value changeable.
   }
@@ -2836,8 +3198,12 @@ class Idc {
     this.monsters = json.monsters.map((monsterJson) => MonsterInstance.fromJson(monsterJson));
   }
 
-  save() {
+  saveTeam() {
     this.saver.saveTeam(this.toJson());
+  }
+
+  saveDungeon() {
+    this.saver.saveDungeon(this.dungeon.toJson());
   }
 
   load(title) {
@@ -2927,7 +3293,8 @@ class Idc {
     return Math.round(totalRcv * (1 + 0.1 * teamRcvAwakenings));
   }
 
-  // Get all pings. Does not include
+  // Get all pings of damage along with healing and bonus attacks.
+  // This is damage before hitting an opponent.
   getDamagePre() {
     // Cleanup.
     this.combos.bonusCombos = 0;
@@ -3348,6 +3715,7 @@ class Idc {
   }
 
   reloadMonsterEditor() {
+    document.getElementById(`idc-team-mode-select${this.playerMode}`).checked = true;
     // Reload Monster IDs
     const monsterSelector = document.getElementById('idc-selector-monster');
     const levelSelector = document.getElementById('idc-level-monster');
@@ -3412,7 +3780,7 @@ class Idc {
         this.monsters[idx].updateLatentsIcon(latentsContainer);
         fullContainer.onclick = () => {
           this.monsterEditingIndex = idx;
-          this.chooseMonsterTab();
+          this.layoutLeftTabs.setActiveTab('Monster');
           this.reloadMonsterEditor();
           this.reloadSelector();
           const selector = document.getElementById('idc-selector-monster');
@@ -3442,6 +3810,7 @@ class Idc {
     }
 
     let currentHp = enemy.currentHp;
+    console.log(enemy);
     // TODO: Figure out this precisely.
     const resolveActive = enemy.resolvePercent > 0 && (100 * enemy.currentHp / enemy.maxHp) > enemy.resolvePercent;
     for (const ping of pings) {
@@ -3474,9 +3843,9 @@ class Idc {
         continue;
       }
       iconEl.innerText = team[i].id;
-      baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `HP: ${team[i].getHp(mp, awoke)}`;
-      baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = `ATK: ${team[i].getAtk(mp, awoke)}`;
-      baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `RCV: ${team[i].getRcv(mp, awoke)}`;
+      baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `${team[i].getHp(mp, awoke)}`;
+      baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = `${team[i].getAtk(mp, awoke)}`;
+      baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `${team[i].getRcv(mp, awoke)}`;
       for (const ping of pings.filter((ping) => ping.source == team[i])) {
         const classToFind = ping.isSub ? 'idc-stat-damage-pre-sub' : 'idc-stat-damage-pre-main';
         const damagePreEl = damageEl.getElementsByClassName(classToFind)[0];
@@ -3486,20 +3855,28 @@ class Idc {
         const damagePostEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post'))[0];
         damagePostEl.style.color = FontColors[ping.attribute];
         damagePostEl.innerText = numberWithCommas(ping.rawDamage);
+        const actualDamageEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post') + '-actual')[0];
         if (ping.rawDamage != ping.actualDamage) {
-          damagePostEl.innerText += ` (${numberWithCommas(ping.actualDamage)})`;
+          actualDamageEl.innerText = `(${numberWithCommas(ping.actualDamage)})`;
+          actualDamageEl.style.color = FontColors[ping.attribute];
+        } else {
+          actualDamageEl.innerText = '';
         }
       }
     }
 
     const totalBaseStatEl = document.getElementById('idc-stat-base-6');
-    totalBaseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `HP: ${this.getHp()}`;
-    totalBaseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `RCV: ${this.getRcv()}`;
+    totalBaseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `${this.getHp()}`;
+    totalBaseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `${this.getRcv()}`;
 
     const totalPreDamageEl = document.getElementById('idc-stat-damage-pre-total');
     totalPreDamageEl.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.amount, 0));
+    const rawDamage = pings.reduce((total, ping) => total + ping.rawDamage, 0);
+    const actualDamage = enemy.currentHp - currentHp;
     const totalPostDamageEl = document.getElementById('idc-stat-damage-post-total');
-    totalPostDamageEl.innerText = `${numberWithCommas(pings.reduce((total, ping) => total + ping.rawDamage, 0))} (${numberWithCommas(enemy.currentHp - currentHp)})`;
+    totalPostDamageEl.innerText = numberWithCommas(rawDamage);
+    const totalPostDamageActualEl = document.getElementById('idc-stat-damage-post-total-actual');
+    totalPostDamageActualEl.innerText = rawDamage != actualDamage ? `(${actualDamage})` : '';
   }
 
   createMonsterSelector() {
@@ -3877,8 +4254,29 @@ class Idc {
     const monsterEditor = document.createElement('div');
     monsterEditor.id = 'idc-monster-editor';
     monsterEditor.style.padding = '5px';
-    monsterEditor.style.borderLeft = BORDER_COLOR;
-    monsterEditor.style.borderRight = BORDER_COLOR;
+    // monsterEditor.style.borderLeft = BORDER_COLOR;
+    // monsterEditor.style.borderRight = BORDER_COLOR;
+
+    const pdchuIO = document.createElement('div');
+    const ioArea = document.createElement('textarea');
+    ioArea.style.width = '100%';
+    ioArea.placeholder = 'pdchu Import + Export';
+    pdchuIO.appendChild(ioArea);
+    const exportButton = document.createElement('button');
+    exportButton.onclick = () => {
+      ioArea.value = this.toPdchu();
+    };
+    exportButton.innerText = 'Export pdchu';
+    pdchuIO.appendChild(exportButton);
+    const importButton = document.createElement('button');
+    importButton.innerText = 'Import pdchu';
+    importButton.onclick = () => {
+      this.fromPdchu(ioArea.value);
+      this.reloadMonsterEditor();
+      this.reloadTeamIcons();
+    };
+    pdchuIO.appendChild(importButton);
+    monsterEditor.appendChild(pdchuIO);
 
     // Player Mode controller.
     const playerModeRadio = document.createElement('div');
@@ -3909,58 +4307,8 @@ class Idc {
     monsterEditor.appendChild(this.createLevelEditor());
     monsterEditor.appendChild(this.createPlusEditor());
     monsterEditor.appendChild(this.createAwakeningEditor());
-    monsterEditor.appendChild(this.saver.createElement(this))
 
     return monsterEditor;
-  }
-
-  chooseMonsterTab() {
-    const monsterTabChooser = document.getElementById('idc-tab-monster');
-    monsterTabChooser.style.borderBottom = '';
-    monsterTabChooser.style.cursor = '';
-    document.getElementById('idc-monster-editor').style.display = '';
-
-    const comboTabChooser = document.getElementById('idc-tab-combo');
-    comboTabChooser.style.borderBottom = BORDER_COLOR;
-    comboTabChooser.style.cursor = 'pointer';
-    document.getElementById('idc-combo-editor').style.display = 'none';
-    const dungeonTabChooser = document.getElementById('idc-tab-dungeon');
-    dungeonTabChooser.style.borderBottom = BORDER_COLOR;
-    dungeonTabChooser.style.cursor = 'pointer';
-    document.getElementById('idc-dungeon-editor').style.display = 'none';
-  }
-
-  chooseComboTab() {
-    const comboTabChooser = document.getElementById('idc-tab-combo');
-    comboTabChooser.style.borderBottom = '';
-    comboTabChooser.style.cursor = '';
-    document.getElementById('idc-combo-editor').style.display = '';
-
-    const monsterTabChooser = document.getElementById('idc-tab-monster');
-    monsterTabChooser.style.borderBottom = BORDER_COLOR;
-    monsterTabChooser.style.cursor = 'pointer';
-    document.getElementById('idc-monster-editor').style.display = 'none';
-    const dungeonTabChooser = document.getElementById('idc-tab-dungeon');
-    dungeonTabChooser.style.borderBottom = BORDER_COLOR;
-    dungeonTabChooser.style.cursor = 'pointer';
-    document.getElementById('idc-dungeon-editor').style.display = 'none';
-  }
-
-  chooseDungeonTab() {
-    const dungeonTabChooser = document.getElementById('idc-tab-dungeon');
-    dungeonTabChooser.style.borderBottom = '';
-    dungeonTabChooser.style.cursor = '';
-    document.getElementById('idc-dungeon-editor').style.display = '';
-
-    const comboTabChooser = document.getElementById('idc-tab-combo');
-    comboTabChooser.style.borderBottom = BORDER_COLOR;
-    comboTabChooser.style.cursor = 'pointer';
-    document.getElementById('idc-combo-editor').style.display = 'none';
-    const monsterTabChooser = document.getElementById('idc-tab-monster');
-    monsterTabChooser.style.borderBottom = BORDER_COLOR;
-    monsterTabChooser.style.cursor = 'pointer';
-    document.getElementById('idc-monster-editor').style.display = 'none';
-
   }
 
   createLayoutLeft() {
@@ -3968,75 +4316,29 @@ class Idc {
     layoutLeft.style.paddingRight = '10px';
     layoutLeft.style.verticalAlign = 'top';
 
-    const debugButton = document.createElement('button');
-    debugButton.innerText = 'DEBUG';
-    debugButton.onclick = () => {
-      // const mp = this.isMultiplayer();
-      // console.log(`Team HP: ${this.getHp()}`);
-      // for (const monster of this.getActiveTeam()) {
-      //   console.log(monster.getCard().name);
-      //   console.log(`HP: ${monster.getHp(mp)} ATK: ${monster.getAtk(mp)} RCV: ${monster.getRcv(mp)}`);
-      // }
-      // console.log(this.getDamagePre());
-      console.log(this.toPdchu());
+    // const debugInput = document.createElement('textarea');
+    // layoutLeft.appendChild(debugInput);
+    // const debugButton = document.createElement('button');
+    // debugButton.innerText = 'DEBUG';
+    // debugButton.onclick = () => {
+    //   console.log(this.toPdchu());
+    //   this.fromPdchu(debugInput.value);
+    //   // this.monsters[0].fromPdchu();
+    // }
 
-      const pings = this.getDamagePre().pings
-      for (const ping of pings) {
-        console.log(ping.source.getCard().name);
-        console.log(ping.amount);
-        console.log(this.dungeon.getActiveEnemy().calcDamage(ping, pings, this.combos, this.isMultiplayer()));
-      }
-    }
-
-    layoutLeft.appendChild(debugButton);
+    // layoutLeft.appendChild(debugButton);
 
     const monsterEditorElement = this.createMonsterEditor();
     const comboEditorElement = this.combos.createElement(this);
     const dungeonEditorElement = this.dungeon.createEditorElement();
-    comboEditorElement.style.display = 'none';
-    dungeonEditorElement.style.display = 'none';
 
-    const tabChooser = document.createElement('table');
-    tabChooser.style.width = '100%';
-    const tabRow = document.createElement('tr');
-    const monsterTabChooser = document.createElement('td');
-    const comboTabChooser = document.createElement('td');
-    const dungeonTabChooser = document.createElement('td');
-    monsterTabChooser.id = 'idc-tab-monster';
-    monsterTabChooser.innerText = 'Monster';
-    monsterTabChooser.style.padding = '5px';
-    monsterTabChooser.style.borderLeft = BORDER_COLOR;
-    monsterTabChooser.style.borderTop = BORDER_COLOR;
-    monsterTabChooser.style.borderRight = BORDER_COLOR;
-    monsterTabChooser.style.borderBottom = '';
-    monsterTabChooser.onclick = () => this.chooseMonsterTab();
-    tabRow.appendChild(monsterTabChooser);
-    comboTabChooser.id = 'idc-tab-combo';
-    comboTabChooser.innerText = 'Combo';
-    comboTabChooser.style.cursor = 'pointer';
-    comboTabChooser.style.padding = '5px';
-    comboTabChooser.style.borderLeft = BORDER_COLOR;
-    comboTabChooser.style.borderTop = BORDER_COLOR;
-    comboTabChooser.style.borderRight = BORDER_COLOR;
-    comboTabChooser.style.borderBottom = BORDER_COLOR;
-    comboTabChooser.onclick = () => this.chooseComboTab();
-    tabRow.appendChild(comboTabChooser);
-    dungeonTabChooser.id = 'idc-tab-dungeon';
-    dungeonTabChooser.innerText = 'Dungeon';
-    dungeonTabChooser.style.cursor = 'pointer';
-    dungeonTabChooser.style.padding = '5px';
-    dungeonTabChooser.style.borderLeft = BORDER_COLOR;
-    dungeonTabChooser.style.borderTop = BORDER_COLOR;
-    dungeonTabChooser.style.borderRight = BORDER_COLOR;
-    dungeonTabChooser.style.borderBottom = BORDER_COLOR;
-    dungeonTabChooser.onclick = () => this.chooseDungeonTab();
-    tabRow.appendChild(dungeonTabChooser);
-    tabChooser.appendChild(tabRow);
+    this.layoutLeftTabs = new TabbedComponent(['Monster', 'Combo', 'Dungeon', 'Save/Load'], 'Monster');
+    this.layoutLeftTabs.getTab('Monster').appendChild(monsterEditorElement);
+    this.layoutLeftTabs.getTab('Combo').appendChild(comboEditorElement);
+    this.layoutLeftTabs.getTab('Dungeon').appendChild(dungeonEditorElement);
+    this.layoutLeftTabs.getTab('Save/Load').appendChild(this.saver.createElement(this));
 
-    layoutLeft.appendChild(tabChooser);
-    layoutLeft.appendChild(monsterEditorElement);
-    layoutLeft.appendChild(comboEditorElement);
-    layoutLeft.appendChild(dungeonEditorElement);
+    layoutLeft.appendChild(this.layoutLeftTabs.getElement());
 
     return layoutLeft;
   }
@@ -4141,7 +4443,7 @@ class Idc {
       const row = document.createElement('tr');
       statDisplayEl.appendChild(row);
     }
-    const rows = statDisplayEl.getElementsByTagName('tr');
+    const rows = [...statDisplayEl.getElementsByTagName('tr')];
     // const iconRow = document.createElement('tr');
     for (let i = 0; i < 7; i++) {
       const statIconContainer = document.createElement('td');
@@ -4155,24 +4457,50 @@ class Idc {
     // Includes HP, ATK, RCV of the current team..
     // const baseStatRow = document.createElement('tr');
     for (let i = 0; i < 7; i++) {
-      const statContainer = document.createElement('td');
-      statContainer.id = `idc-stat-base-${i}`;
-      const hpEl = document.createElement('div');
-      const atkEl = document.createElement('div');
-      const rcvEl = document.createElement('div');
+      const statCell = document.createElement('td');
+      statCell.id = `idc-stat-base-${i}`;
+      const statContainer = document.createElement('div');
+      const miniStatTable = document.createElement('table');
+      miniStatTable.style.fontSize = 'small';
+      const hpRow = document.createElement('tr');
+      const atkRow = document.createElement('tr');
+      const rcvRow = document.createElement('tr');
+      const hpLabel = document.createElement('td');
+      const atkLabel = document.createElement('td');
+      const rcvLabel = document.createElement('td');
+      hpLabel.innerText = 'HP:';
+      if (i != 6) {
+        atkLabel.innerText = 'ATK:';
+      }
+      rcvLabel.innerText = 'RCV:';
+      hpRow.appendChild(hpLabel);
+      atkRow.appendChild(atkLabel);
+      rcvRow.appendChild(rcvLabel);
+
+      const hpEl = document.createElement('td');
+      const atkEl = document.createElement('td');
+      const rcvEl = document.createElement('td');
       hpEl.className = 'idc-stat-base-hp';
       atkEl.className = 'idc-stat-base-atk';
       rcvEl.className = 'idc-stat-base-rcv';
-      hpEl.innerText = 'HP: 0';
+      hpEl.style.textAlign = 'right';
+      atkEl.style.textAlign = 'right';
+      rcvEl.style.textAlign = 'right';
+      hpEl.innerText = '0';
       if (i != 6) {
-        atkEl.innerText = 'ATK: 0';
+        atkEl.innerText = '0';
       }
-      rcvEl.innerText = 'RCV: 0';
-      statContainer.appendChild(hpEl)
-      statContainer.appendChild(atkEl);
-      statContainer.appendChild(rcvEl)
+      rcvEl.innerText = '0';
+      hpRow.appendChild(hpEl)
+      atkRow.appendChild(atkEl);
+      rcvRow.appendChild(rcvEl)
+      miniStatTable.appendChild(hpRow);
+      miniStatTable.appendChild(atkRow);
+      miniStatTable.appendChild(rcvRow);
 
-      rows[i].appendChild(statContainer);
+      statContainer.appendChild(miniStatTable);
+      statCell.appendChild(statContainer);
+      rows[i].appendChild(statCell);
     }
     // statDisplayEl.appendChild(baseStatRow);
     // const preDamageRow = document.createElement('tr');
@@ -4184,7 +4512,7 @@ class Idc {
         const mainAttr = document.createElement('div');
         mainAttr.className = 'idc-stat-damage-pre-main';
         mainAttr.innerText = '0';
-        preDamageContainer.appendChild(mainAttr)
+        preDamageContainer.appendChild(mainAttr);
         const subAttr = document.createElement('div');
         subAttr.className = 'idc-stat-damage-pre-sub';
         subAttr.innerText = '0';
@@ -4209,16 +4537,28 @@ class Idc {
         const mainAttr = document.createElement('div');
         mainAttr.className = 'idc-stat-damage-post-main';
         mainAttr.innerText = '0';
-        postDamageContainer.appendChild(mainAttr)
+        postDamageContainer.appendChild(mainAttr);
+        const mainAttrActual = document.createElement('div');
+        mainAttrActual.className = 'idc-stat-damage-post-main-actual';
+        mainAttrActual.innerText = '';
+        postDamageContainer.appendChild(mainAttrActual);
         const subAttr = document.createElement('div');
         subAttr.className = 'idc-stat-damage-post-sub';
         subAttr.innerText = '0';
         postDamageContainer.appendChild(subAttr);
+        const subAttrActual = document.createElement('div');
+        subAttrActual.className = 'idc-stat-damage-post-sub-actual';
+        subAttrActual.innerText = '';
+        postDamageContainer.appendChild(subAttrActual);
       } else {
         const totalEl = document.createElement('div');
         totalEl.id = 'idc-stat-damage-post-total';
         totalEl.innerText = '0';
         postDamageContainer.appendChild(totalEl);
+        const totalActualEl = document.createElement('div');
+        totalActualEl.id = 'idc-stat-damage-post-total-actual';
+        totalActualEl.innerText = '';
+        postDamageContainer.appendChild(totalActualEl);
       }
       rows[i].appendChild(postDamageContainer);
     }
