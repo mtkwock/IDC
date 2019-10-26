@@ -361,65 +361,59 @@ class MonsterInstance {
     let superAwakeningIdx = -1;
     let level = 99;
 
-    let monsterName = '';
-    if (s.startsWith('"')) {
-      const endQuoteIdx = s.indexOf('"', 1);
-      if (endQuoteIdx == -1) {
-        return 'Monster needs end quote.';
-      }
-      monsterName = s.substring(1, endQuoteIdx).trim();
-      s = s.substring(endQuoteIdx + 1).trim();
-    } else {
-      let endIdx = s.length;
-      if (s.includes('(')) {
-        endIdx = s.indexOf('(');
-      } else if (s.includes('[')) {
-        endIdx = s.indexOf('[');
-      } else if (s.includes('|')) {
-        endIdx = s.indexOf('|');
-      }
-      monsterName = s.substring(0, endIdx).trim();
-      s = s.substring(endIdx).trim();
+    const MONSTER_NAME_REGEX = /^\s*((\"[^"]+\")|[^\(\[\|]+)/;
+    const ASSIST_REGEX = /\(\s*("[^"]*")?[^\)]+\)/;
+    const ASSIST_NAME_REGEX = /^\s*("[^"]+"|[^|]+)/;
+    const LATENT_REGEX = /\[[^\]]*\]/;
+
+    const monsterNameMatch = s.match(MONSTER_NAME_REGEX);
+    if (!monsterNameMatch) {
+      return 'Monster name is not matchable!';
     }
+    let monsterName = monsterNameMatch[0].trim();
+    if (monsterName.startsWith('"')) {
+      monsterName = monsterName.substring(1);
+    }
+    if (monsterName.endsWith('"')) {
+      monsterName = monsterNameMatch.substring(0, monsterName.length - 1);
+    }
+    // Remove monster name.
+    s = s.replace(monsterNameMatch[0], '');
 
     // Handle assist.
     let assistName = '';
-    if (s.startsWith('(')) {
-      if (s[1] == '"') {
-        const endQuoteIdx = s.indexOf('"', 1);
-        if (endQuoteIdx == -1) {
-          return 'Assist needs end quote';
+    const assistMatch = s.match(ASSIST_REGEX);
+    if (assistMatch) {
+      let assistString = assistMatch[0].substring(1, assistMatch[0].length - 1).trim();
+      const assistNameMatch = assistString.match(ASSIST_NAME_REGEX);
+      if (assistNameMatch) {
+        assistName = assistNameMatch[0].trim();
+        if (assistName.startsWith('"')) {
+          assistName = assistName.substring(1);
         }
-        assistName = s.substring(1, endQuoteIdx).trim();
-        s = s.substring(endQuoteIdx + 1);
-      } else {
-        let endIdx = s.indexOf(')');
-        if (s.substring(1, endIdx).includes('|')) {
-          endIdx = s.indexOf('|');
+        if (assistName.endsWith('"')) {
+          assistName = assistName.substring(0, assistName.length - 1);
         }
-        assistName = s.substring(1, endIdx).trim();
-        s = s.substring(endIdx); // Will start with either ) or |
+
+        const pieces = assistString.replace(assistNameMatch[0], '').split('|');
+        if (pieces.length > 1) {
+          const assistStatString = pieces.slice(1).join('');
+          const lvMatch = assistStatString.match(/lv\d+/);
+          if (lvMatch) {
+            assistLevel = Number(lvMatch[0].substring(2));
+          }
+          const plusMatch = assistStatString.match(/\+297/);
+          if (plusMatch) {
+            assistPlussed = true;
+          }
+        }
       }
-      if (s.startsWith('|')) {
-        const assistStatSubstring = s.substring(0, s.indexOf(')'));
-        const lvMatch = assistStatSubstring.match(/lv\d+/);
-        if (lvMatch) {
-          assistLevel = Number(lvMatch[0].substring(2));
-        }
-        const plusMatch = assistStatSubstring.match(/\+297/);
-        if (plusMatch) {
-          assistPlussed = true;
-        }
-      }
-      s = s.substring(s.indexOf(')') + 1).trim();
+      s = s.replace(assistNameMatch[0], '').trim();
     }
 
-    // Handle latents
-    if (s.startsWith('[')) {
-      const latentString = s.substring(1, s.indexOf(']'));
-      s = s.substring(latentString.length + 2).trim();
-
-      const latentPieces = latentString.split(',').map((piece) => piece.trim()).filter((a) => !!a);
+    let latentMatch = s.match(LATENT_REGEX);
+    if (latentMatch) {
+      const latentPieces = latentMatch[0].trim().split(',').map((piece) => piece.trim()).filter((a) => !!a);
       for (const piece of latentPieces) {
         const latentName = piece.match(/\w+\+?/)[0];
         const latent = PdchuToLatent.get(latentName);
@@ -434,10 +428,13 @@ class MonsterInstance {
           latents.push(latent);
         }
       }
+
+      s.replace(latentMatch[0], '');
     }
 
     // Handle Stats.
-    if (s.startsWith('|')) {
+    if (s.includes('|')) {
+      s = s.substring(s.indexOf('|'));
       const saMatch = s.match(/sa\d/);
       if (saMatch) {
         superAwakeningIdx = Number(saMatch[0].substring(2)) - 1;
@@ -498,7 +495,6 @@ class MonsterInstance {
       }
     }
   }
-
 
   copyFrom(otherInstance) {
     this.id = otherInstance.id;
