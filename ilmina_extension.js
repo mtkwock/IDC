@@ -8,7 +8,7 @@
  *
  * To install this extension...
  * 1) Download/clone folder from https://github.com/mtkwock/IDC
- * 2) In Chrome, open chrome://extensions
+ * 2) In Chrome, open chrome://extensions, ensure Developer Mode is on (top right toggle).
  * 3) In the top left, click "Load unpacked"
  * 4) Navigate to the (uncompressed) folder of the download from GitHub
  * 5) Click "Select" when in the folder.
@@ -18,6 +18,7 @@
  * To update
  * 1) git pull
  * 2) In chrome://extensions, click the Refresh button in the installed app.
+ * 3) The next time you load this page, you should get this.
  *
  * To use
  * Change Monster:
@@ -3139,8 +3140,12 @@ class Idc {
       teamStrings.length = 3;
     }
     this.setPlayerMode(teamStrings.length);
+    const defaultMonster = '1929 | +0aw0lv1'
     for (let i = 0; i < teamStrings.length; i++) {
       const multiplierRegex = /\*\s*\d$/;
+      if (!teamStrings[i]) {
+        teamStrings[i] = defaultMonster;
+      }
       let monsterStrings = teamStrings[i].split('/')
           .map((s) => s.trim())
           .reduce((allStrings, monsterString) => {
@@ -3160,14 +3165,14 @@ class Idc {
           monsterStrings.length = 5;
         }
         while(monsterStrings.length < 5) {
-          monsterStrings.push('1929');
+          monsterStrings.push(defaultMonster);
         }
       } else {
         if (monsterStrings.length > 6) {
           monsterStrings.length = 6;
         }
         while(monsterStrings.length < 6) {
-          monsterStrings.push('1929');
+          monsterStrings.push(defaultMonster);
         }
       }
 
