@@ -339,7 +339,7 @@ function atkScalingFromLinkedOrbs(params) {
 function atkRcvFromSubHp(params) {
   let [maxThreshPercent, attrBits, typeBits, atk100, rcv100] = params;
   rcv100 = rcv100 || 100;
-  const {atk, rcvPost} = baseStatFromAttributeType(attrBits, typeBits, 0, atk100, rcv100);
+  const {atk, rcvPost} = baseStatFromAttributeType([attrBits, typeBits, 0, atk100, rcv100]);
 
   return createLeaderSkill({
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {

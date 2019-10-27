@@ -413,7 +413,7 @@ class MonsterInstance {
 
     let latentMatch = s.match(LATENT_REGEX);
     if (latentMatch) {
-      const latentPieces = latentMatch[0].trim().split(',').map((piece) => piece.trim()).filter((a) => !!a);
+      const latentPieces = latentMatch[0].substring(1, latentMatch[0].length - 1).trim().split(',').map((piece) => piece.trim()).filter((a) => !!a);
       for (const piece of latentPieces) {
         const latentName = piece.match(/\w+\+?/)[0];
         const latent = PdchuToLatent.get(latentName);
@@ -468,7 +468,7 @@ class MonsterInstance {
       }
     }
 
-    const bestGuessIds = fuzzyMonsterSearch(monsterName, 1, prioritizedMonsterSearch);
+    const bestGuessIds = fuzzyMonsterSearch(monsterName, 20, prioritizedMonsterSearch);
     if (bestGuessIds.length == 0) {
       return 'No monsters matched';
     }
@@ -487,12 +487,15 @@ class MonsterInstance {
     this.setAtkPlus(atkPlus);
     this.setRcvPlus(rcvPlus);
     if (assistName) {
-      const bestGuessInheritIds = fuzzyMonsterSearch(assistName, 1);
+      const bestGuessInheritIds = fuzzyMonsterSearch(assistName, 20);
       if (bestGuessInheritIds.length == 0) {
+        this.inheritId = -1;
         console.warn('No inherits matched');
       } else {
         this.inheritId = bestGuessInheritIds[0];
       }
+    } else {
+      this.inheritId = -1;
     }
   }
 
@@ -1982,6 +1985,10 @@ class DungeonInstance {
     opponentImage.style.maxWidth = '350px';
     el.appendChild(opponentImage);
 
+    const damageTable = document.createElement('table');
+    for (let i = 0; i < 6; i++) {
+
+    }
     // TODO: Add controllers for buffs and debuffs.
 
     return el;
@@ -3561,7 +3568,9 @@ class Idc {
     }
 
     this.playerMode = newMode;
-
+    if (this.activeTeamIdx >= newMode) {
+      this.setActiveTeamIdx(newMode - 1);
+    }
     // TODO: Update UI to reflect this.
   }
 
@@ -3570,6 +3579,7 @@ class Idc {
       throw `Index should be [0, ${this.players}]`;
     }
     this.activeTeamIdx = idx;
+    this.reloadStatDisplay();
     // TODO: Update visuals and calculations when this happens.
   }
 
@@ -3601,6 +3611,8 @@ class Idc {
         playerMemberContainer.appendChild(latentsIcon);
         playerMemberContainer.onclick = () => {
           this.monsterEditingIndex = idx;
+          this.setActiveTeamIdx(i);
+          this.reloadStatDisplay();
           this.reloadMonsterEditor();
           this.reloadSelector();
         }
@@ -3782,6 +3794,7 @@ class Idc {
         fullContainer.onclick = () => {
           this.monsterEditingIndex = idx;
           this.layoutLeftTabs.setActiveTab('Monster');
+          this.setActiveTeamIdx(i);
           this.reloadMonsterEditor();
           this.reloadSelector();
           const selector = document.getElementById('idc-selector-monster');
@@ -3810,74 +3823,84 @@ class Idc {
       el.innerText = '';
     }
 
-    let currentHp = enemy.currentHp;
-    console.log(enemy);
-    // TODO: Figure out this precisely.
-    const resolveActive = enemy.resolvePercent > 0 && (100 * enemy.currentHp / enemy.maxHp) > enemy.resolvePercent;
-    for (const ping of pings) {
-      ping.rawDamage = enemy.calcDamage(ping, pings, this.combos, this.isMultiplayer());
-      let next = currentHp - ping.rawDamage;
-      if (next < 0) {
-        next = 0;
-      }
-      if (next < 1 && resolveActive) {
-        next = 1;
-      }
-      if (next > enemy.maxHp) {
-        next = enemy.maxHp;
-      }
-      ping.actualDamage = currentHp - next;
-      currentHp = next;
-    }
+    // let currentHp = enemy.currentHp;
+    // // console.log(enemy);
+    // // TODO: Figure out this precisely.
+    // const resolveActive = enemy.resolvePercent > 0 && (100 * enemy.currentHp / enemy.maxHp) > enemy.resolvePercent;
+    // for (const ping of pings) {
+    //   ping.rawDamage = enemy.calcDamage(ping, pings, this.combos, this.isMultiplayer());
+    //   let next = currentHp - ping.rawDamage;
+    //   if (next < 0) {
+    //     next = 0;
+    //   }
+    //   if (next < 1 && resolveActive) {
+    //     next = 1;
+    //   }
+    //   if (next > enemy.maxHp) {
+    //     next = enemy.maxHp;
+    //   }
+    //   ping.actualDamage = currentHp - next;
+    //   currentHp = next;
+    // }
+    const atkTotals = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0};
 
     for (let i = 0; i < 6; i++) {
-      const iconEl = document.getElementById(`idc-stat-icon-${i}`);
+      // const iconEl = document.getElementById(`idc-stat-icon-${i}`);
       const baseStatEl = document.getElementById(`idc-stat-base-${i}`);
-      const damageEl = document.getElementById(`idc-stat-damage-pre-${i}`);
-      const postDamageEl = document.getElementById(`idc-stat-damage-post-${i}`);
+      // const damageEl = document.getElementById(`idc-stat-damage-pre-${i}`);
+      // const postDamageEl = document.getElementById(`idc-stat-damage-post-${i}`);
       // Handle no team member not present.
-      if (!team[i]) {
-        iconEl.innerText = '';
-        baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = '';
-        baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = '';
-        baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = '';
-        continue;
+      // if (!team[i]) {
+      //   iconEl.innerText = '';
+      //   baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = '';
+      //   baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = '';
+      //   baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = '';
+      //   continue;
+      // }
+      // iconEl.innerText = team[i].id;
+      const attackBase = team[i].getAtk(mp, awoke);
+      const card = team[i].getCard();
+      atkTotals[card.attribute] += attackBase;
+      if (card.subattribute > -1) {
+        atkTotals[card.subattribute] += Math.ceil(attackBase / (card.attribute == card.subattribute ? 10 : 3));
       }
-      iconEl.innerText = team[i].id;
       baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `${team[i].getHp(mp, awoke)}`;
       baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = `${team[i].getAtk(mp, awoke)}`;
       baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `${team[i].getRcv(mp, awoke)}`;
-      for (const ping of pings.filter((ping) => ping.source == team[i])) {
-        const classToFind = ping.isSub ? 'idc-stat-damage-pre-sub' : 'idc-stat-damage-pre-main';
-        const damagePreEl = damageEl.getElementsByClassName(classToFind)[0];
-        damagePreEl.style.color = FontColors[ping.attribute];
-        damagePreEl.innerText = numberWithCommas(ping.amount);
+      // for (const ping of pings.filter((ping) => ping.source == team[i])) {
+      //   const classToFind = ping.isSub ? 'idc-stat-damage-pre-sub' : 'idc-stat-damage-pre-main';
+      //   const damagePreEl = damageEl.getElementsByClassName(classToFind)[0];
+      //   damagePreEl.style.color = FontColors[ping.attribute];
+      //   damagePreEl.innerText = numberWithCommas(ping.amount);
 
-        const damagePostEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post'))[0];
-        damagePostEl.style.color = FontColors[ping.attribute];
-        damagePostEl.innerText = numberWithCommas(ping.rawDamage);
-        const actualDamageEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post') + '-actual')[0];
-        if (ping.rawDamage != ping.actualDamage) {
-          actualDamageEl.innerText = `(${numberWithCommas(ping.actualDamage)})`;
-          actualDamageEl.style.color = FontColors[ping.attribute];
-        } else {
-          actualDamageEl.innerText = '';
-        }
-      }
+      //   const damagePostEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post'))[0];
+      //   damagePostEl.style.color = FontColors[ping.attribute];
+      //   damagePostEl.innerText = numberWithCommas(ping.rawDamage);
+      //   const actualDamageEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post') + '-actual')[0];
+      //   if (ping.rawDamage != ping.actualDamage) {
+      //     actualDamageEl.innerText = `(${numberWithCommas(ping.actualDamage)})`;
+      //     actualDamageEl.style.color = FontColors[ping.attribute];
+      //   } else {
+      //     actualDamageEl.innerText = '';
+      //   }
+      // }
     }
 
-    const totalBaseStatEl = document.getElementById('idc-stat-base-6');
-    totalBaseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `${this.getHp()}`;
-    totalBaseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `${this.getRcv()}`;
+    // const totalBaseStatEl = document.getElementById('idc-stat-base-6');
+    document.getElementById('idc-stat-total-hp').innerText = `${this.getHp()}`;
+    document.getElementById('idc-stat-total-rcv').innerText = `${this.getRcv()}`;
+    for (let i = 0; i < 5; i++) {
+      document.getElementById(`idc-stat-atk-${i}`).innerText = atkTotals[i];
+    }
 
-    const totalPreDamageEl = document.getElementById('idc-stat-damage-pre-total');
-    totalPreDamageEl.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.amount, 0));
-    const rawDamage = pings.reduce((total, ping) => total + ping.rawDamage, 0);
-    const actualDamage = enemy.currentHp - currentHp;
-    const totalPostDamageEl = document.getElementById('idc-stat-damage-post-total');
-    totalPostDamageEl.innerText = numberWithCommas(rawDamage);
-    const totalPostDamageActualEl = document.getElementById('idc-stat-damage-post-total-actual');
-    totalPostDamageActualEl.innerText = rawDamage != actualDamage ? `(${actualDamage})` : '';
+    // const totalPreDamageEl = document.getElementById('idc-stat-damage-pre-total');
+    // totalPreDamageEl.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.amount, 0));
+    // const rawDamage = pings.reduce((total, ping) => total + ping.rawDamage, 0);
+    // const actualDamage = enemy.currentHp - currentHp;
+    // const totalPostDamageEl = document.getElementById('idc-stat-damage-post-total');
+    // totalPostDamageEl.innerText = numberWithCommas(rawDamage);
+    // const totalPostDamageActualEl = document.getElementById('idc-stat-damage-post-total-actual');
+    // totalPostDamageActualEl.innerText = rawDamage != actualDamage ? `(${actualDamage})` : '';
   }
 
   createMonsterSelector() {
@@ -4376,6 +4399,7 @@ class Idc {
     };
     teamBuilderEl.appendChild(titleElement);
     teamBuilderEl.appendChild(this.createTeamsForm());
+    const layoutMiddleTabs = new TabbedComponent(['Description', 'Stats'], 'Stats');
     const descriptionElement = document.createElement('textarea');
     descriptionElement.id = 'idc-team-description';
     descriptionElement.setAttribute('style',
@@ -4384,99 +4408,64 @@ class Idc {
     descriptionElement.onkeyup = () => {
       this.description = descriptionElement.value;
     };
-    teamBuilderEl.appendChild(descriptionElement);
+    layoutMiddleTabs.getTab('Description').appendChild(descriptionElement);
+    layoutMiddleTabs.getTab('Stats').appendChild(this.createStatDisplay());
+    teamBuilderEl.appendChild(layoutMiddleTabs.getElement());
+    teamBuilderEl.style.width = '100%';
     layoutMiddle.appendChild(teamBuilderEl);
 
     return layoutMiddle;
   }
 
-  createLayoutRight() {
-    const layoutRight = document.createElement('td');
-    layoutRight.style.fontSize = 'small';
-    layoutRight.style.verticalAlign = 'top';
-
-    const playerActiveRadio = document.createElement('div');
-    for (let i = 0; i < 3; i++) {
-      const modeInput = document.createElement('input');
-      modeInput.type = 'radio';
-      modeInput.id = `idc-team-active-select${i + 1}`;
-      if (i == this.activeTeamIdx) {
-        modeInput.checked = true;
-      }
-      modeInput.name = 'idc-team-active-select';
-      modeInput.onclick = () => {
-        this.setActiveTeamIdx(i);
-        this.reloadStatDisplay();
-      }
-      playerActiveRadio.appendChild(modeInput);
-      const modeLabel = document.createElement('label');
-      modeLabel.for = modeInput.id;
-      modeLabel.innerText = `${i + 1}P`;
-      playerActiveRadio.appendChild(modeLabel)
-    }
-
-    layoutRight.appendChild(playerActiveRadio);
-
-    const hpPercentInput = document.createElement('input');
-    hpPercentInput.type = 'number';
-    hpPercentInput.id = 'idc-team-hp-percent';
-    hpPercentInput.value = this.hpPercent;
-    hpPercentInput.style.width = '50px';
-    hpPercentInput.onkeyup = () => {
-      let hpPercent = hpPercentInput.value;
-      if (!hpPercent || hpPercent <= 0) {
-        hpPercent = 1;
-      }
-      if (hpPercent > 100) {
-        hpPercent = 100;
-      }
-      this.hpPercent = hpPercent;
-      hpPercentInput.value = hpPercent;
-      this.reloadStatDisplay();
-    }
-    layoutRight.appendChild(hpPercentInput);
-
+  createStatDisplay() {
     // 7 rows showing stats of the currently active team.
+    const el = document.createElement('div');
     const statDisplayEl = document.createElement('table');
     statDisplayEl.id = 'idc-stat-display';
     statDisplayEl.style.fontSize = 'small';
-    for (let i = 0; i < 7; i++) {
-      const row = document.createElement('tr');
-      statDisplayEl.appendChild(row);
-    }
+    statDisplayEl.style.width = '100%';
+    // for (let i = 0; i < 7; i++) {
+    //   const row = document.createElement('tr');
+    //   statDisplayEl.appendChild(row);
+    // }
     const rows = [...statDisplayEl.getElementsByTagName('tr')];
     // const iconRow = document.createElement('tr');
-    for (let i = 0; i < 7; i++) {
-      const statIconContainer = document.createElement('td');
-      statIconContainer.id = `idc-stat-icon-${i}`;
-      if (i == 6) {
-        statIconContainer.innerText = 'Total';
-      }
-      rows[i].appendChild(statIconContainer);
-    }
+    // for (let i = 0; i < 7; i++) {
+    //   const statIconContainer = document.createElement('td');
+    //   statIconContainer.id = `idc-stat-icon-${i}`;
+    //   if (i == 6) {
+    //     statIconContainer.innerText = 'Total';
+    //   }
+    //   rows[i].appendChild(statIconContainer);
+    // }
     // statDisplayEl.appendChild(iconRow);
     // Includes HP, ATK, RCV of the current team..
-    // const baseStatRow = document.createElement('tr');
-    for (let i = 0; i < 7; i++) {
+    const baseStatRow = document.createElement('tr');
+    for (let i = 0; i < 6; i++) {
       const statCell = document.createElement('td');
+      statCell.style.width = '16.66%';
       statCell.id = `idc-stat-base-${i}`;
       const statContainer = document.createElement('div');
       const miniStatTable = document.createElement('table');
+      miniStatTable.width = '100%';
       miniStatTable.style.fontSize = 'small';
       const hpRow = document.createElement('tr');
       const atkRow = document.createElement('tr');
       const rcvRow = document.createElement('tr');
-      const hpLabel = document.createElement('td');
-      const atkLabel = document.createElement('td');
-      const rcvLabel = document.createElement('td');
-      hpLabel.innerText = 'HP:';
-      if (i != 6) {
+      if (i == 0) {
+        const hpLabel = document.createElement('td');
+        const atkLabel = document.createElement('td');
+        const rcvLabel = document.createElement('td');
+        hpLabel.style.fontSize = 'x-small';
+        atkLabel.style.fontSize = 'x-small';
+        rcvLabel.style.fontSize = 'x-small';
+        hpLabel.innerText = 'HP:';
         atkLabel.innerText = 'ATK:';
+        rcvLabel.innerText = 'RCV:';
+        hpRow.appendChild(hpLabel);
+        atkRow.appendChild(atkLabel);
+        rcvRow.appendChild(rcvLabel);        
       }
-      rcvLabel.innerText = 'RCV:';
-      hpRow.appendChild(hpLabel);
-      atkRow.appendChild(atkLabel);
-      rcvRow.appendChild(rcvLabel);
 
       const hpEl = document.createElement('td');
       const atkEl = document.createElement('td');
@@ -4501,68 +4490,68 @@ class Idc {
 
       statContainer.appendChild(miniStatTable);
       statCell.appendChild(statContainer);
-      rows[i].appendChild(statCell);
+      baseStatRow.appendChild(statCell);
     }
-    // statDisplayEl.appendChild(baseStatRow);
+    statDisplayEl.appendChild(baseStatRow);
     // const preDamageRow = document.createElement('tr');
-    for (let i = 0; i < 7; i++) {
-      const preDamageContainer = document.createElement('td');
-      preDamageContainer.id = `idc-stat-damage-pre-${i}`;
-      preDamageContainer.style.textAlign = 'right';
-      if (i < 6) {
-        const mainAttr = document.createElement('div');
-        mainAttr.className = 'idc-stat-damage-pre-main';
-        mainAttr.innerText = '0';
-        preDamageContainer.appendChild(mainAttr);
-        const subAttr = document.createElement('div');
-        subAttr.className = 'idc-stat-damage-pre-sub';
-        subAttr.innerText = '0';
-        preDamageContainer.appendChild(subAttr);
-      } else {
-        // TODO: Total value.
-        const totalEl = document.createElement('div');
-        totalEl.id = 'idc-stat-damage-pre-total';
-        totalEl.innerText = '0';
-        preDamageContainer.appendChild(totalEl);
-      }
-      rows[i].appendChild(preDamageContainer);
-    }
+    // for (let i = 0; i < 6; i++) {
+    //   const preDamageContainer = document.createElement('td');
+    //   preDamageContainer.id = `idc-stat-damage-pre-${i}`;
+    //   preDamageContainer.style.textAlign = 'right';
+    //   if (i < 6) {
+    //     const mainAttr = document.createElement('div');
+    //     mainAttr.className = 'idc-stat-damage-pre-main';
+    //     mainAttr.innerText = '0';
+    //     preDamageContainer.appendChild(mainAttr);
+    //     const subAttr = document.createElement('div');
+    //     subAttr.className = 'idc-stat-damage-pre-sub';
+    //     subAttr.innerText = '0';
+    //     preDamageContainer.appendChild(subAttr);
+    //   } else {
+    //     // TODO: Total value.
+    //     const totalEl = document.createElement('div');
+    //     totalEl.id = 'idc-stat-damage-pre-total';
+    //     totalEl.innerText = '0';
+    //     preDamageContainer.appendChild(totalEl);
+    //   }
+    //   preDamageRow.appendChild(preDamageContainer);
+    // }
     // statDisplayEl.appendChild(preDamageRow);
 
-    // const postDamageRow = document.createElement('tr');
-    for (let i = 0; i < 7; i++) {
-      const postDamageContainer = document.createElement('td');
-      postDamageContainer.id = `idc-stat-damage-post-${i}`;
-      postDamageContainer.style.textAlign = 'right';
-      if (i < 6) {
-        const mainAttr = document.createElement('div');
-        mainAttr.className = 'idc-stat-damage-post-main';
-        mainAttr.innerText = '0';
-        postDamageContainer.appendChild(mainAttr);
-        const mainAttrActual = document.createElement('div');
-        mainAttrActual.className = 'idc-stat-damage-post-main-actual';
-        mainAttrActual.innerText = '';
-        postDamageContainer.appendChild(mainAttrActual);
-        const subAttr = document.createElement('div');
-        subAttr.className = 'idc-stat-damage-post-sub';
-        subAttr.innerText = '0';
-        postDamageContainer.appendChild(subAttr);
-        const subAttrActual = document.createElement('div');
-        subAttrActual.className = 'idc-stat-damage-post-sub-actual';
-        subAttrActual.innerText = '';
-        postDamageContainer.appendChild(subAttrActual);
-      } else {
-        const totalEl = document.createElement('div');
-        totalEl.id = 'idc-stat-damage-post-total';
-        totalEl.innerText = '0';
-        postDamageContainer.appendChild(totalEl);
-        const totalActualEl = document.createElement('div');
-        totalActualEl.id = 'idc-stat-damage-post-total-actual';
-        totalActualEl.innerText = '';
-        postDamageContainer.appendChild(totalActualEl);
-      }
-      rows[i].appendChild(postDamageContainer);
-    }
+    // // const postDamageRow = document.createElement('tr');
+    // for (let i = 0; i < 7; i++) {
+    //   const postDamageContainer = document.createElement('td');
+    //   postDamageContainer.id = `idc-stat-damage-post-${i}`;
+    //   postDamageContainer.style.textAlign = 'right';
+    //   if (i < 6) {
+    //     const mainAttr = document.createElement('div');
+    //     mainAttr.className = 'idc-stat-damage-post-main';
+    //     mainAttr.innerText = '0';
+    //     postDamageContainer.appendChild(mainAttr);
+    //     const mainAttrActual = document.createElement('div');
+    //     mainAttrActual.className = 'idc-stat-damage-post-main-actual';
+    //     mainAttrActual.innerText = '';
+    //     postDamageContainer.appendChild(mainAttrActual);
+    //     const subAttr = document.createElement('div');
+    //     subAttr.className = 'idc-stat-damage-post-sub';
+    //     subAttr.innerText = '0';
+    //     postDamageContainer.appendChild(subAttr);
+    //     const subAttrActual = document.createElement('div');
+    //     subAttrActual.className = 'idc-stat-damage-post-sub-actual';
+    //     subAttrActual.innerText = '';
+    //     postDamageContainer.appendChild(subAttrActual);
+    //   } else {
+    //     const totalEl = document.createElement('div');
+    //     totalEl.id = 'idc-stat-damage-post-total';
+    //     totalEl.innerText = '0';
+    //     postDamageContainer.appendChild(totalEl);
+    //     const totalActualEl = document.createElement('div');
+    //     totalActualEl.id = 'idc-stat-damage-post-total-actual';
+    //     totalActualEl.innerText = '';
+    //     postDamageContainer.appendChild(totalActualEl);
+    //   }
+    //   rows[i].appendChild(postDamageContainer);
+    // }
     // statDisplayEl.appendChild(postDamageRow);
     // SB
     // OEs + Rows
@@ -4575,7 +4564,97 @@ class Idc {
     // Determines total time to move.
     // const timeRow = document.createElement('tr');
     // Autoheal
-    layoutRight.appendChild(statDisplayEl);
+    el.appendChild(statDisplayEl);
+    const totalBaseStatEl = document.createElement('div');
+
+    const totalHpLabel = document.createElement('div');
+    totalHpLabel.style.display = 'inline-block';
+    totalHpLabel.innerText = 'Total HP: ';
+    totalBaseStatEl.appendChild(totalHpLabel);
+    const totalHpEl = document.createElement('div');
+    totalHpEl.id = 'idc-stat-total-hp';
+    totalHpEl.style.display = 'inline-block';
+    totalHpEl.style.padding = '10px';
+    totalHpEl.innerText = '0';
+    totalBaseStatEl.appendChild(totalHpEl);
+    const totalRcvLabel = document.createElement('div');
+    totalRcvLabel.style.display = 'inline-block';
+    totalRcvLabel.innerText = 'Total RCV: ';
+    totalBaseStatEl.appendChild(totalRcvLabel);
+    const totalRcvEl = document.createElement('div');
+    totalRcvEl.id = 'idc-stat-total-rcv';
+    totalRcvEl.style.display = 'inline-block';
+    totalRcvEl.style.padding = '10px';
+    totalRcvEl.innerText = '0';
+    totalBaseStatEl.appendChild(totalRcvEl);
+
+    totalBaseStatEl.appendChild(document.createElement('br'));
+    const totalAtkLabel = document.createElement('div');
+    totalAtkLabel.style.display = 'inline-block';
+    totalAtkLabel.innerText = 'Total Attribute ATK: ';
+    totalBaseStatEl.appendChild(totalAtkLabel);
+    for (let i = 0; i < 5; i++) {
+      const totalAtkEl = document.createElement('div');
+      totalAtkEl.id = `idc-stat-atk-${i}`;
+      totalAtkEl.innerText = '0';
+      totalAtkEl.style.color = FontColors[i];
+      totalAtkEl.style.display = 'inline-block';
+      totalAtkEl.style.padding = '3px';
+      totalBaseStatEl.appendChild(totalAtkEl);
+    }
+
+    el.appendChild(totalBaseStatEl);
+    return el;
+  }
+
+  createLayoutRight() {
+    const layoutRight = document.createElement('td');
+    layoutRight.style.fontSize = 'small';
+    layoutRight.style.verticalAlign = 'top';
+
+    // const playerActiveRadio = document.createElement('div');
+    // for (let i = 0; i < 3; i++) {
+    //   const modeInput = document.createElement('input');
+    //   modeInput.type = 'radio';
+    //   modeInput.id = `idc-team-active-select${i + 1}`;
+    //   if (i == this.activeTeamIdx) {
+    //     modeInput.checked = true;
+    //   }
+    //   // modeInput.name = 'idc-team-active-select';
+    //   // modeInput.onclick = () => {
+    //   //   this.setActiveTeamIdx(i);
+    //   //   this.reloadStatDisplay();
+    //   // }
+    //   playerActiveRadio.appendChild(modeInput);
+    //   const modeLabel = document.createElement('label');
+    //   modeLabel.for = modeInput.id;
+    //   modeLabel.innerText = `${i + 1}P`;
+    //   playerActiveRadio.appendChild(modeLabel)
+    // }
+
+    // layoutRight.appendChild(playerActiveRadio);
+
+    const hpPercentInput = document.createElement('input');
+    hpPercentInput.type = 'number';
+    hpPercentInput.id = 'idc-team-hp-percent';
+    hpPercentInput.value = this.hpPercent;
+    hpPercentInput.style.width = '50px';
+    hpPercentInput.onkeyup = () => {
+      let hpPercent = hpPercentInput.value;
+      if (!hpPercent || hpPercent <= 0) {
+        hpPercent = 1;
+      }
+      if (hpPercent > 100) {
+        hpPercent = 100;
+      }
+      this.hpPercent = hpPercent;
+      hpPercentInput.value = hpPercent;
+      this.reloadStatDisplay();
+    }
+    layoutRight.appendChild(hpPercentInput);
+
+
+    // layoutRight.appendChild(statDisplayEl);
 
     const battleEl = this.dungeon.createBattleElement();
     layoutRight.appendChild(battleEl);
