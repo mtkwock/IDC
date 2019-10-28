@@ -1996,6 +1996,7 @@ class DungeonInstance {
   createBattleElement() {
     const el = document.createElement('div');
     el.id = 'idc-battle-opponent';
+    el.style.width = '400px';
     // Opponent Image.
     const opponentImage = document.createElement('img');
     opponentImage.id = 'idc-battle-opponent-img';
@@ -2200,16 +2201,22 @@ class DungeonInstance {
     totalRow.appendChild(td3);
     const preDamageTotal = document.createElement('td');
     const postDamageTotal = document.createElement('td');
-    const effectiveDamageTotal = document.createElement('td');
+    const effectiveDamage = document.createElement('td');
+    const effectiveDamageTotal = document.createElement('div');
+    const effectiveDamagePercent = document.createElement('div');
     preDamageTotal.id = 'idc-battle-damage-pre-total';
     postDamageTotal.id = 'idc-battle-damage-post-total';
     effectiveDamageTotal.id = 'idc-battle-damage-effective-total';
+    effectiveDamagePercent.id = 'idc-battle-damage-effective-percent';
     preDamageTotal.innerText = '0';
     postDamageTotal.innerText = '0';
     effectiveDamageTotal.innerText = '0';
+    effectiveDamagePercent.innerText = '(0%)';
     totalRow.appendChild(preDamageTotal);
     totalRow.appendChild(postDamageTotal);
-    totalRow.appendChild(effectiveDamageTotal);
+    effectiveDamage.appendChild(effectiveDamageTotal);
+    effectiveDamage.appendChild(effectiveDamagePercent);
+    totalRow.appendChild(effectiveDamage);
     damageTable.appendChild(totalRow);
     // TODO: Add controllers for buffs and debuffs.
 
@@ -2242,7 +2249,10 @@ class DungeonInstance {
       ping.rawDamage = enemy.calcDamage(ping, pings, this.idc.combos, this.idc.isMultiplayer());
       let next = currentHp - ping.rawDamage;
       if (next < 0) { next = 0; }
-      if (next < 1 && resolveActive) { next = 1; }
+      if (next < 1 && resolveActive) {
+        next = 1;
+        ping.resolveTriggered = true;
+      }
       if (next > enemy.maxHp) { next = enemy.maxHp; }
       ping.actualDamage = currentHp - next;
       currentHp = next;
@@ -2299,47 +2309,11 @@ class DungeonInstance {
     const preDamageTotal = document.getElementById('idc-battle-damage-pre-total');
     const postDamageTotal = document.getElementById('idc-battle-damage-post-total');
     const effectiveDamageTotal = document.getElementById('idc-battle-damage-effective-total');
+    const effectiveDamagePercent = document.getElementById('idc-battle-damage-effective-percent');
     preDamageTotal.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.amount, 0));
     postDamageTotal.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.rawDamage, 0));
-    effectiveDamageTotal.innerText = numberWithCommas(enemy.currentHp - currentHp);
-
-      // const damageEl = document.getElementById(`idc-stat-damage-pre-${i}`);
-      // const postDamageEl = document.getElementById(`idc-stat-damage-post-${i}`);
-      // Handle no team member not present.
-      // if (!team[i]) {
-      //   iconEl.innerText = '';
-      //   baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = '';
-      //   baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = '';
-      //   baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = '';
-      //   continue;
-      // }
-      // iconEl.innerText = team[i].id;
-      // for (const ping of pings.filter((ping) => ping.source == team[i])) {
-      //   const classToFind = ping.isSub ? 'idc-stat-damage-pre-sub' : 'idc-stat-damage-pre-main';
-      //   const damagePreEl = damageEl.getElementsByClassName(classToFind)[0];
-      //   damagePreEl.style.color = FontColors[ping.attribute];
-      //   damagePreEl.innerText = numberWithCommas(ping.amount);
-
-      //   const damagePostEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post'))[0];
-      //   damagePostEl.style.color = FontColors[ping.attribute];
-      //   damagePostEl.innerText = numberWithCommas(ping.rawDamage);
-      //   const actualDamageEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post') + '-actual')[0];
-      //   if (ping.rawDamage != ping.actualDamage) {
-      //     actualDamageEl.innerText = `(${numberWithCommas(ping.actualDamage)})`;
-      //     actualDamageEl.style.color = FontColors[ping.attribute];
-      //   } else {
-      //     actualDamageEl.innerText = '';
-      //   }
-      // }    // const totalPreDamageEl = document.getElementById('idc-stat-damage-pre-total');
-    // totalPreDamageEl.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.amount, 0));
-    // const rawDamage = pings.reduce((total, ping) => total + ping.rawDamage, 0);
-    // const actualDamage = enemy.currentHp - currentHp;
-    // const totalPostDamageEl = document.getElementById('idc-stat-damage-post-total');
-    // totalPostDamageEl.innerText = numberWithCommas(rawDamage);
-    // const totalPostDamageActualEl = document.getElementById('idc-stat-damage-post-total-actual');
-    // totalPostDamageActualEl.innerText = rawDamage != actualDamage ? `(${actualDamage})` : '';
-
-    // const totalBaseStatEl = document.getElementById('idc-stat-base-6');
+    effectiveDamageTotal.innerText = `${numberWithCommas(enemy.currentHp - currentHp)}`;
+    effectiveDamagePercent.innerText = `(${String((enemy.currentHp - currentHp) * 100 / enemy.maxHp).substring(0, 5)}%)`;
   }
 
   getActiveEnemy() {
