@@ -1420,6 +1420,9 @@ class EnemyInstance {
     if (this.id in vm.model.cards && this.currentAttribute == -1) {
       return vm.model.cards[this.id].attribute;
     }
+    if (this.id in vm.model.cards && this.currentAttribute == -2) {
+      return vm.model.cards[this.id].subattribute > -1 ? vm.model.cards[this.id].subattribute : vm.model.cards[this.id].attribute;
+    }
     return this.currentAttribute;
   }
 
@@ -1466,7 +1469,7 @@ class EnemyInstance {
 
     // Void
     if (this.damageVoid > 0
-        && currentDamage > damageVoid
+        && currentDamage > this.damageVoid
         && !this.ignoreDamageVoid
         && comboContainer.combos[COLORS[ping.attribute]].every((combo) => combo.shape != Shape.BOX)) {
       currentDamage = 0;
@@ -1833,7 +1836,9 @@ class DungeonInstance {
     for (let i = 0; i < this.floors.length; i++) {
       const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
       floorEditor.onclick = () => {
+        this.getActiveEnemy().reset();
         this.activeFloor = i;
+        this.getActiveEnemy().reset();
         this.reloadEditorElement();
         this.reloadBattleElement();
       }
@@ -2033,6 +2038,7 @@ class DungeonInstance {
     const enemyHpInput = document.createElement('input');
     enemyHpInput.id = 'idc-battle-opponent-hp-input';
     enemyHpInput.type = 'number';
+    enemyHpInput.style.width = '100px';
     enemyHpInput.onchange = () => {
       // console.log('Enemy HP Input changed to ' + enemyHpInput.value);
       const enemy = this.getActiveEnemy();
@@ -2063,6 +2069,200 @@ class DungeonInstance {
     enemyHpEl.appendChild(enemyHpPercent);
 
     el.appendChild(enemyHpEl);
+
+    const opponentSetterTable = document.createElement('table');
+    opponentSetterTable.style.fontSize = 'small';
+    for (let i = 0; i < 3; i++) {
+      const row = document.createElement('tr');
+      for (let j = 0; j < 6; j++) {
+        const cell = document.createElement('td');
+        row.appendChild(cell);
+      }
+      opponentSetterTable.appendChild(row);
+    }
+    const opponentSetterCells = opponentSetterTable.getElementsByTagName('td');
+    // Status Shield, Damage Shield, Current Attribute
+    const statusCheckbox = document.createElement('input');
+    statusCheckbox.id = 'idc-battle-opponent-status';
+    statusCheckbox.type = 'checkbox';
+    statusCheckbox.onclick = () => {
+      // console.log('Status checkbox set to ' + statusCheckbox.checked);
+      this.getActiveEnemy().statusShield = statusCheckbox.checked;
+      this.reloadBattleElement();
+    };
+    const shieldInput = document.createElement('input');
+    shieldInput.id = 'idc-battle-opponent-shield';
+    shieldInput.type = 'number';
+    shieldInput.value = 0;
+    shieldInput.style.width = '45px';
+    shieldInput.onchange = () => {
+      let value = Number(shieldInput.value);
+      if (value < 0) {
+        value = 0;
+      }
+      if (value > 100) {
+        value = 100;
+      }
+      this.getActiveEnemy().shieldPercent = value;
+      this.reloadBattleElement();
+      // console.log('Shield input set to ' + shieldInput.value);
+    };
+    const opponentAttributeSetter = document.createElement('select');
+    opponentAttributeSetter.id = 'idc-battle-opponent-attribute';
+    opponentAttributeSetter.onchange = () => {
+      this.getActiveEnemy().currentAttribute = opponentAttributeSetter.value;
+      this.reloadBattleElement();
+      // console.log('Opponent attribute set to ' + opponentAttributeSetter.value);
+    }
+    const optionMain = document.createElement('option');
+    optionMain.innerText = 'Main';
+    optionMain.value = -1;
+    optionMain.selected = true;
+    opponentAttributeSetter.appendChild(optionMain);
+    const optionSub = document.createElement('option');
+    optionSub.innerText = 'Sub';
+    optionSub.value = -2;
+    opponentAttributeSetter.appendChild(optionSub);
+    const optionFire = document.createElement('option');
+    optionFire.innerText = 'Fire';
+    optionFire.value = 0;
+    opponentAttributeSetter.appendChild(optionFire);
+    const optionWater = document.createElement('option');
+    optionWater.innerText = 'Water';
+    optionWater.value = 1;
+    opponentAttributeSetter.appendChild(optionWater);
+    const optionWood = document.createElement('option');
+    optionWood.innerText = 'Wood';
+    optionWood.value = 2;
+    opponentAttributeSetter.appendChild(optionWood);
+    const optionLight = document.createElement('option');
+    optionLight.innerText = 'Light';
+    optionLight.value = 3;
+    opponentAttributeSetter.appendChild(optionLight);
+    const optionDark = document.createElement('option');
+    optionDark.innerText = 'Dark';
+    optionDark.value = 4;
+    opponentAttributeSetter.appendChild(optionDark);
+
+    opponentSetterCells[0].innerText = 'Status';
+    opponentSetterCells[1].appendChild(statusCheckbox);
+    opponentSetterCells[2].innerText = 'Shield';
+    opponentSetterCells[3].appendChild(shieldInput);
+    opponentSetterCells[4].innerText = 'Attribute';
+    opponentSetterCells[5].appendChild(opponentAttributeSetter);
+    // Damage, Combo, Attribute Absorb
+    const damageAbsorbInput = document.createElement('input');
+    damageAbsorbInput.id = 'idc-battle-opponent-absorb-damage';
+    damageAbsorbInput.type = 'number';
+    damageAbsorbInput.value = -1;
+
+    damageAbsorbInput.onchange = () => {
+      // console.log('Damage absorb set to ' + damageAbsorbInput.value);
+      let value = Number(damageAbsorbInput.value);
+      if (value <= 0) {
+        value = -1;
+      }
+      this.getActiveEnemy().damageAbsorb = value;
+      this.reloadBattleElement();
+    };
+
+    const comboAbsorbInput = document.createElement('input');
+    comboAbsorbInput.type = 'number';
+    comboAbsorbInput.id = 'idc-battle-opponent-absorb-combo';
+    comboAbsorbInput.type = 'number';
+    comboAbsorbInput.value = 0;
+    comboAbsorbInput.style.width = '45px';
+    comboAbsorbInput.onchange = () => {
+      let value = Number(comboAbsorbInput.value);
+      if (value <= 0) {
+        value = -1;
+      }
+      this.getActiveEnemy().comboAbsorb = value;
+      this.reloadBattleElement();
+      // console.log('Combo absorb set to ≤' + comboAbsorbInput.value);
+    };
+
+    const attrAbsorbEl = document.createElement('div');
+    for (let i = 0; i < 5; i++) {
+      const absorbSpan = document.createElement('span');
+      absorbSpan.id = `idc-battle-opponent-absorb-attr-${i}`;
+      absorbSpan.style.cursor = 'pointer';
+      absorbSpan.selected = false;
+      absorbSpan.innerText = COLORS[i].toUpperCase();
+      // let lastBorder = String(absorbSpan.style.border);
+      absorbSpan.onmouseover = () => {
+        absorbSpan.style.border = absorbSpan.selected ? '' : BORDER_COLOR;
+      };
+      absorbSpan.onmouseleave = () => {
+        absorbSpan.style.border = absorbSpan.selected ? BORDER_COLOR : '';
+      };
+      absorbSpan.onclick = () => {
+        console.log('Absorb el clicked: ' + i);
+        const absorbed = this.getActiveEnemy().attributeAbsorb;
+        if (absorbed.includes(i)) {
+          absorbed.splice(absorbed.indexOf(i), 1);
+        } else {
+          absorbed.push(i);
+        }
+        this.reloadBattleElement();
+      };
+      attrAbsorbEl.appendChild(absorbSpan);
+    }
+
+    opponentSetterCells[6].innerText = '>=Absorb';
+    opponentSetterCells[7].appendChild(damageAbsorbInput);
+    opponentSetterCells[8].innerText = '<=Combo';
+    opponentSetterCells[9].appendChild(comboAbsorbInput)
+    opponentSetterCells[10].innerText = 'Attr Absorb';
+    opponentSetterCells[11].appendChild(attrAbsorbEl);
+    // Damage Void, Defense Break, Enrage
+    const voidInput = document.createElement('input');
+    voidInput.id = 'idc-battle-opponent-void';
+    voidInput.type = 'number';
+    voidInput.value = 0;
+    voidInput.onchange = () => {
+      // console.log('Void input set to ' + voidInput.value);
+      let value = Number(voidInput.value);
+      if (value <= 0) {
+        value = -1;
+      }
+      this.getActiveEnemy().damageVoid = value;
+      this.reloadBattleElement();
+    };
+    const defBreakInput = document.createElement('input');
+    defBreakInput.id = 'idc-battle-opponent-defbreak';
+    defBreakInput.type = 'number';
+    defBreakInput.style.width = '45px';
+    defBreakInput.value = 0;
+    defBreakInput.onchange = () => {
+      // console.log('Defense break set to ' + defBreakInput.value);
+      let value = Number(defBreakInput.value);
+      if (value < 0) {
+        value = 0;
+      }
+      if (value > 100) {
+        value = 100;
+      }
+      this.getActiveEnemy().ignoreDefensePercent = value;
+      this.reloadBattleElement();
+    };
+
+    const enrageInput = document.createElement('input');
+    enrageInput.id = 'idc-battle-opponent-enrage';
+    enrageInput.type = 'number';
+    enrageInput.style.width = '45px';
+    enrageInput.value = 100;
+    enrageInput.onchange = () => {
+      console.warn('Enrage set to ' + enrageInput.value + ' but not used!');
+    };
+
+    opponentSetterCells[12].innerText = '>=Void';
+    opponentSetterCells[13].appendChild(voidInput);
+    opponentSetterCells[14].innerText = '%DefBreak';
+    opponentSetterCells[15].appendChild(defBreakInput);
+    opponentSetterCells[16].innerText = 'Enrage%';
+    opponentSetterCells[17].appendChild(enrageInput);
+    el.appendChild(opponentSetterTable);
 
     // Ping by ping damage.
     const damageTable = document.createElement('table');
@@ -2240,6 +2440,32 @@ class DungeonInstance {
     const hpPercent = document.getElementById('idc-battle-opponent-hp-percent');
     hpPercent.innerText = `${enemy.currentHp * 100 / enemy.maxHp}`.substring(0, 5) + '%';
 
+    const statusShield = document.getElementById('idc-battle-opponent-status');
+    statusShield.checked = enemy.statusShield;
+    const damageShield = document.getElementById('idc-battle-opponent-shield');
+    damageShield.value = enemy.shieldPercent;
+    const attributeInput = document.getElementById('idc-battle-opponent-attribute');
+    attributeInput.value = enemy.currentAttribute;
+    const damageAbsorbInput = document.getElementById('idc-battle-opponent-absorb-damage');
+    damageAbsorbInput.value = enemy.damageAbsorb;
+    document.getElementById('idc-battle-opponent-absorb-combo');
+    const comboAbsorbInput = document.getElementById('idc-battle-opponent-absorb-combo');
+    comboAbsorbInput.value = enemy.comboAbsorb;
+    for (let i = 0; i < 5; i++) {
+      const attributeAbsorbEl = document.getElementById(`idc-battle-opponent-absorb-attr-${i}`);
+      if (enemy.attributeAbsorb.includes(i)) {
+        attributeAbsorbEl.selected = true;
+        attributeAbsorbEl.style.border = BORDER_COLOR;
+      } else {
+        attributeAbsorbEl.selected = false;
+        attributeAbsorbEl.style.border = '';
+      }
+    }
+    const damageVoid = document.getElementById('idc-battle-opponent-void');
+    damageVoid.value = enemy.damageVoid;
+    const defBreak = document.getElementById('idc-battle-opponent-defbreak');
+    defBreak.value = enemy.ignoreDefensePercent;
+
     const {pings, bonusAttacks, healing, trueBonusAttacks} = this.idc.getDamagePre();
     const activeTeam = this.idc.getActiveTeam();
     let currentHp = enemy.currentHp;
@@ -2294,13 +2520,16 @@ class DungeonInstance {
           preDamageSub.innerText = numberWithCommas(ping.amount);
           postDamageSub.innerText = numberWithCommas(ping.rawDamage);
           if (ping.actualDamage != ping.rawDamage) {
-            effectiveDamageSub.innerText = ping.actualDamage == 0 ? 'overkill' : numberWithCommas(ping.actualDamage);
+            if (currentHp == 0) {
+
+            }
+            effectiveDamageSub.innerText = ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage);
           }
         } else {
           preDamageMain.innerText = numberWithCommas(ping.amount);
           postDamageMain.innerText = numberWithCommas(ping.rawDamage);
           if (ping.actualDamage != ping.rawDamage) {
-            effectiveDamageMain.innerText = ping.actualDamage == 0 ? 'overkill' : numberWithCommas(ping.actualDamage);
+            effectiveDamageMain.innerText = ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage);
           }
         }
       }
