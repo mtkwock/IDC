@@ -1124,7 +1124,7 @@ class MonsterInstance {
   }
 
   getAttribute() {
-    return this.attribute || this.getCard().attribute;
+    return this.attribute >= 0 ? this.attribute : this.getCard().attribute;
   }
 }
 
@@ -1406,6 +1406,10 @@ class EnemyInstance {
     this.delayed = false; // Not to be used yet.
   }
 
+  getCard() {
+    return vm.model.cards[this.id];
+  }
+
   getAttribute() {
     if (this.id in vm.model.cards && this.currentAttribute == -1) {
       return vm.model.cards[this.id].attribute;
@@ -1550,7 +1554,14 @@ EnemyInstance.fromJson = (json) =>{
   return instance;
 };
 
-const FontColors = ['red', 'cyan', 'lawngreen', 'yellow', 'fuchsia'];
+const FontColors = {
+  0: 'red',
+  1: 'cyan',
+  2: 'lawngreen',
+  3: 'yellow',
+  4: 'fuchsia',
+  5: 'gray',
+};
 
 
 class DungeonFloor {
@@ -1682,7 +1693,8 @@ DungeonFloor.fromJson = (json) => {
 }
 
 class DungeonInstance {
-  constructor() {
+  constructor(idc) {
+    this.idc = idc;
     this.title = '';
     // Ignoring 5x4 boards.
     this.bigBoard = false;
@@ -1821,7 +1833,7 @@ class DungeonInstance {
       }
       const floorDelete = floorEditor.getElementsByClassName('idc-dungeon-floor-delete')[0];
       floorDelete.onclick = () => {
-        this.deleteFloor(i);
+        this.deleteFloor(i, idc);
       }
 
       floorsEditor.appendChild(floorEditor);
@@ -1983,21 +1995,256 @@ class DungeonInstance {
     const enemyId = this.getActiveEnemy().id;
     opponentImage.src = enemyId in vm.model.cards ? CardAssets.getCroppedPortrait(vm.model.cards[enemyId]) : '';
     opponentImage.style.maxWidth = '350px';
+    opponentImage.style.display = 'block';
+    opponentImage.style.marginLeft = 'auto';
+    opponentImage.style.marginRight = 'auto';
     el.appendChild(opponentImage);
 
-    const damageTable = document.createElement('table');
-    for (let i = 0; i < 6; i++) {
+    const enemyHpEl = document.createElement('div');
+    enemyHpEl.style.paddingTop = '5px';
+    enemyHpEl.style.paddingBottom = '10px';
+    enemyHpEl.style.paddingLeft = '5%';
+    enemyHpEl.style.paddingRight = '5%';
+    const enemyHpSlider = document.createElement('input');
+    enemyHpSlider.id = 'idc-battle-opponent-hp-slider';
+    enemyHpSlider.type = 'range';
+    enemyHpSlider.min = 0;
+    enemyHpSlider.max = 1;
+    enemyHpSlider.style.webkitAppearance = 'none';
+    enemyHpSlider.style.width = '100%';
+    enemyHpSlider.style.height = '5px';
+    enemyHpSlider.style.marginBottom = '5px';
+    enemyHpSlider.onchange = () => {
+      // console.log('Enemy HP Slider changed to ' + enemyHpSlider.value);
+      this.getActiveEnemy().currentHp = Math.round(Number(enemyHpSlider.value));
+      this.reloadBattleElement();
+    };
+    enemyHpEl.appendChild(enemyHpSlider);
 
+    const enemyHpInput = document.createElement('input');
+    enemyHpInput.id = 'idc-battle-opponent-hp-input';
+    enemyHpInput.type = 'number';
+    enemyHpInput.onchange = () => {
+      // console.log('Enemy HP Input changed to ' + enemyHpInput.value);
+      const enemy = this.getActiveEnemy();
+      enemy.currentHp = Number(enemyHpInput.value);
+      if (enemy.currentHp > enemy.maxHp) {
+        enemy.currentHp = enemy.maxHp;
+      }
+      if (enemy.currentHp < 0) {
+        enemy.currentHp = 0;
+      }
+      this.reloadBattleElement();
+    };
+    enemyHpEl.appendChild(enemyHpInput);
+
+    const divisionSpan = document.createElement('span');
+    divisionSpan.innerText = '/';
+    enemyHpEl.appendChild(divisionSpan);
+
+    const enemyHpMax = document.createElement('span');
+    enemyHpMax.id = 'idc-battle-opponent-hp-max';
+    enemyHpMax.innerText = '1';
+    enemyHpMax.style.marginRight = '15px';
+    enemyHpEl.appendChild(enemyHpMax);
+
+    const enemyHpPercent = document.createElement('span');
+    enemyHpPercent.id = 'idc-battle-opponent-hp-percent';
+    enemyHpPercent.innerText = '100%';
+    enemyHpEl.appendChild(enemyHpPercent);
+
+    el.appendChild(enemyHpEl);
+
+    const damageTable = document.createElement('table');
+    damageTable.style.fontSize = 'small';
+    damageTable.style.textAlign = 'right';
+    for (let i = 0; i < 6; i++) {
+      const damageRow = document.createElement('tr');
+
+      const preDamageCell = document.createElement('td');
+      const postDamageCell = document.createElement('td');
+      const effectiveDamageCell = document.createElement('td');
+
+      preDamageCell.id = `idc-battle-damage-pre-${i}`;
+      postDamageCell.id = `idc-battle-damage-post-${i}`;
+      effectiveDamageCell.id = `idc-battle-damage-effective-${i}`;
+
+      preDamageCell.style.padding = '3px';
+      postDamageCell.style.padding = '3px';
+      effectiveDamageCell.style.padding = '3px';
+
+      preDamageCell.style.border = '1px solid white';
+      postDamageCell.style.border = '1px solid white';
+      effectiveDamageCell.style.border = '1px solid white';
+
+      const preDamageMain = document.createElement('div');
+      const postDamageMain = document.createElement('div');
+      const effectiveDamageMain = document.createElement('div');
+      preDamageMain.id = `idc-battle-damage-pre-main-${i}`;
+      postDamageMain.id = `idc-battle-damage-post-main-${i}`;
+      effectiveDamageMain.id = `idc-battle-damage-effective-main-${i}`;
+      preDamageMain.innerText = '0';
+      postDamageMain.innerText = '0';
+      effectiveDamageMain.innerText = '0';
+      preDamageCell.appendChild(preDamageMain);
+      postDamageCell.appendChild(postDamageMain);
+      effectiveDamageCell.appendChild(effectiveDamageMain);
+
+      const preDamageSub = document.createElement('div');
+      const postDamageSub = document.createElement('div');
+      const effectiveDamageSub = document.createElement('div');
+      preDamageSub.id = `idc-battle-damage-pre-sub-${i}`;
+      postDamageSub.id = `idc-battle-damage-post-sub-${i}`;
+      effectiveDamageSub.id = `idc-battle-damage-effective-sub-${i}`;
+      preDamageSub.innerText = '0';
+      postDamageSub.innerText = '0';
+      effectiveDamageSub.innerText = '0';
+      preDamageCell.appendChild(preDamageSub);
+      postDamageCell.appendChild(postDamageSub);
+      effectiveDamageCell.appendChild(effectiveDamageSub);
+
+      damageRow.appendChild(preDamageCell);
+      damageRow.appendChild(postDamageCell);
+      damageRow.appendChild(effectiveDamageCell);
+
+      damageTable.appendChild(damageRow);
     }
+
+    const totalRow = document.createElement('tr');
+    const preDamageTotal = document.createElement('td');
+    const postDamageTotal = document.createElement('td');
+    const effectiveDamageTotal = document.createElement('td');
+    preDamageTotal.id = 'idc-battle-damage-pre-total';
+    postDamageTotal.id = 'idc-battle-damage-post-total';
+    effectiveDamageTotal.id = 'idc-battle-damage-effective-total';
+    preDamageTotal.innerText = '0';
+    postDamageTotal.innerText = '0';
+    effectiveDamageTotal.innerText = '0';
+    damageTable.appendChild(preDamageTotal);
+    damageTable.appendChild(postDamageTotal);
+    damageTable.appendChild(effectiveDamageTotal);
     // TODO: Add controllers for buffs and debuffs.
 
+    el.appendChild(damageTable);
     return el;
   }
 
   reloadBattleElement() {
     const opponentImage = document.getElementById('idc-battle-opponent-img');
-    const enemyId = this.getActiveEnemy().id;
-    opponentImage.src = enemyId in vm.model.cards ? CardAssets.getCroppedPortrait(vm.model.cards[enemyId]) : '';
+    const enemy = this.getActiveEnemy();
+    opponentImage.src = enemy.id in vm.model.cards ? CardAssets.getCroppedPortrait(vm.model.cards[enemy.id]) : '';
+
+    const hpSlider = document.getElementById('idc-battle-opponent-hp-slider');
+    hpSlider.style.background = FontColors[enemy.getAttribute()];
+    hpSlider.max = enemy.maxHp;
+    hpSlider.value = enemy.currentHp;
+    const hpInput = document.getElementById('idc-battle-opponent-hp-input');
+    hpInput.value = enemy.currentHp;
+    const hpMax = document.getElementById('idc-battle-opponent-hp-max');
+    hpMax.innerText = enemy.maxHp;
+    const hpPercent = document.getElementById('idc-battle-opponent-hp-percent');
+    hpPercent.innerText = `${enemy.currentHp * 100 / enemy.maxHp}`.substring(0, 5) + '%';
+
+    const {pings, bonusAttacks, healing, trueBonusAttacks} = this.idc.getDamagePre();
+    const activeTeam = this.idc.getActiveTeam();
+    let currentHp = enemy.currentHp;
+    // TODO: Figure out this precisely.
+    const resolveActive = enemy.resolvePercent > 0 && (100 * enemy.currentHp / enemy.maxHp) > enemy.resolvePercent;
+    for (const ping of pings) {
+      ping.rawDamage = enemy.calcDamage(ping, pings, this.idc.combos, this.idc.isMultiplayer());
+      let next = currentHp - ping.rawDamage;
+      if (next < 0) { next = 0; }
+      if (next < 1 && resolveActive) { next = 1; }
+      if (next > enemy.maxHp) { next = enemy.maxHp; }
+      ping.actualDamage = currentHp - next;
+      currentHp = next;
+    }
+
+    for (let i = 0; i < 6; i++) {
+      const mainColor = FontColors[activeTeam[i].getAttribute()];
+      const subColor = FontColors[activeTeam[i].getCard().subattribute];
+
+      const preDamageMain = document.getElementById(`idc-battle-damage-pre-main-${i}`);
+      preDamageMain.innerText = '0';
+      preDamageMain.style.color = mainColor;
+      const postDamageMain = document.getElementById(`idc-battle-damage-post-main-${i}`);
+      postDamageMain.innerText = '0';
+      postDamageMain.style.color = mainColor;
+      const effectiveDamageMain = document.getElementById(`idc-battle-damage-effective-main-${i}`);
+      effectiveDamageMain.innerText = ' - ';
+      effectiveDamageMain.style.color = mainColor;
+
+      const preDamageSub = document.getElementById(`idc-battle-damage-pre-sub-${i}`);
+      preDamageSub.innerText = '0';
+      preDamageSub.style.color = subColor;
+      const postDamageSub = document.getElementById(`idc-battle-damage-post-sub-${i}`);
+      postDamageSub.innerText = '0';
+      postDamageSub.style.color = subColor;
+      const effectiveDamageSub = document.getElementById(`idc-battle-damage-effective-sub-${i}`);
+      effectiveDamageSub.innerText = ' - ';
+      effectiveDamageSub.style.color = subColor;
+
+      for (const ping of pings.filter((ping) => ping.source == activeTeam[i])) {
+        if (ping.isSub) {
+          preDamageSub.innerText = numberWithCommas(ping.amount);
+          postDamageSub.innerText = numberWithCommas(ping.rawDamage);
+          if (ping.actualDamage != ping.rawDamage) {
+            effectiveDamageSub.innerText = ping.actualDamage == 0 ? 'overkill' : numberWithCommas(ping.actualDamage);
+          }
+        } else {
+          preDamageMain.innerText = numberWithCommas(ping.amount);
+          postDamageMain.innerText = numberWithCommas(ping.rawDamage);
+          if (ping.actualDamage != ping.rawDamage) {
+            effectiveDamageMain.innerText = ping.actualDamage == 0 ? 'overkill' : numberWithCommas(ping.actualDamage);
+          }
+        }
+      }
+    }
+
+    const preDamageTotal = document.getElementById('idc-battle-damage-pre-total');
+    const postDamageTotal = document.getElementById('idc-battle-damage-post-total');
+    const effectiveDamageTotal = document.getElementById('idc-battle-damage-effective-total');
+    preDamageTotal.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.amount, 0));
+    postDamageTotal.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.rawDamage, 0));
+    effectiveDamageTotal.innerText = numberWithCommas(enemy.currentHp - currentHp);
+
+      // const damageEl = document.getElementById(`idc-stat-damage-pre-${i}`);
+      // const postDamageEl = document.getElementById(`idc-stat-damage-post-${i}`);
+      // Handle no team member not present.
+      // if (!team[i]) {
+      //   iconEl.innerText = '';
+      //   baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = '';
+      //   baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = '';
+      //   baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = '';
+      //   continue;
+      // }
+      // iconEl.innerText = team[i].id;
+      // for (const ping of pings.filter((ping) => ping.source == team[i])) {
+      //   const classToFind = ping.isSub ? 'idc-stat-damage-pre-sub' : 'idc-stat-damage-pre-main';
+      //   const damagePreEl = damageEl.getElementsByClassName(classToFind)[0];
+      //   damagePreEl.style.color = FontColors[ping.attribute];
+      //   damagePreEl.innerText = numberWithCommas(ping.amount);
+
+      //   const damagePostEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post'))[0];
+      //   damagePostEl.style.color = FontColors[ping.attribute];
+      //   damagePostEl.innerText = numberWithCommas(ping.rawDamage);
+      //   const actualDamageEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post') + '-actual')[0];
+      //   if (ping.rawDamage != ping.actualDamage) {
+      //     actualDamageEl.innerText = `(${numberWithCommas(ping.actualDamage)})`;
+      //     actualDamageEl.style.color = FontColors[ping.attribute];
+      //   } else {
+      //     actualDamageEl.innerText = '';
+      //   }
+      // }    // const totalPreDamageEl = document.getElementById('idc-stat-damage-pre-total');
+    // totalPreDamageEl.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.amount, 0));
+    // const rawDamage = pings.reduce((total, ping) => total + ping.rawDamage, 0);
+    // const actualDamage = enemy.currentHp - currentHp;
+    // const totalPostDamageEl = document.getElementById('idc-stat-damage-post-total');
+    // totalPostDamageEl.innerText = numberWithCommas(rawDamage);
+    // const totalPostDamageActualEl = document.getElementById('idc-stat-damage-post-total-actual');
+    // totalPostDamageActualEl.innerText = rawDamage != actualDamage ? `(${actualDamage})` : '';
+
+    // const totalBaseStatEl = document.getElementById('idc-stat-base-6');
   }
 
   getActiveEnemy() {
@@ -2011,7 +2258,7 @@ class DungeonInstance {
     };
   }
 
-  loadJson(json) {
+  loadJson(json, idc) {
     this.title = json.title;
     this.floors = json.floors.map((floor) => DungeonFloor.fromJson(floor));
     this.activeFloor = 0;
@@ -3083,7 +3330,7 @@ class Idc {
         new MonsterInstance(), new MonsterInstance(), new MonsterInstance(),
     ];
 
-    this.dungeon = new DungeonInstance();
+    this.dungeon = new DungeonInstance(this);
 
     this.playerMode = 2;
     this.activeTeamIdx = 0;
@@ -3814,50 +4061,11 @@ class Idc {
     const team = this.getActiveTeam();
     const mp = this.isMultiplayer();
     const awoke = this.effects.awakenings;
-    const enemy = this.dungeon.getActiveEnemy();
-    const {pings, bonusAttacks, healing, trueBonusAttacks} = this.getDamagePre();
-    for (const el of document.getElementsByClassName('idc-stat-damage-pre-main')) {
-      el.innerText = '';
-    }
-    for (const el of document.getElementsByClassName('idc-stat-damage-pre-sub')) {
-      el.innerText = '';
-    }
-
-    // let currentHp = enemy.currentHp;
-    // // console.log(enemy);
-    // // TODO: Figure out this precisely.
-    // const resolveActive = enemy.resolvePercent > 0 && (100 * enemy.currentHp / enemy.maxHp) > enemy.resolvePercent;
-    // for (const ping of pings) {
-    //   ping.rawDamage = enemy.calcDamage(ping, pings, this.combos, this.isMultiplayer());
-    //   let next = currentHp - ping.rawDamage;
-    //   if (next < 0) {
-    //     next = 0;
-    //   }
-    //   if (next < 1 && resolveActive) {
-    //     next = 1;
-    //   }
-    //   if (next > enemy.maxHp) {
-    //     next = enemy.maxHp;
-    //   }
-    //   ping.actualDamage = currentHp - next;
-    //   currentHp = next;
-    // }
     const atkTotals = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0};
 
     for (let i = 0; i < 6; i++) {
       // const iconEl = document.getElementById(`idc-stat-icon-${i}`);
       const baseStatEl = document.getElementById(`idc-stat-base-${i}`);
-      // const damageEl = document.getElementById(`idc-stat-damage-pre-${i}`);
-      // const postDamageEl = document.getElementById(`idc-stat-damage-post-${i}`);
-      // Handle no team member not present.
-      // if (!team[i]) {
-      //   iconEl.innerText = '';
-      //   baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = '';
-      //   baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = '';
-      //   baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = '';
-      //   continue;
-      // }
-      // iconEl.innerText = team[i].id;
       const attackBase = team[i].getAtk(mp, awoke);
       const card = team[i].getCard();
       atkTotals[card.attribute] += attackBase;
@@ -3867,40 +4075,16 @@ class Idc {
       baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `${team[i].getHp(mp, awoke)}`;
       baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = `${team[i].getAtk(mp, awoke)}`;
       baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `${team[i].getRcv(mp, awoke)}`;
-      // for (const ping of pings.filter((ping) => ping.source == team[i])) {
-      //   const classToFind = ping.isSub ? 'idc-stat-damage-pre-sub' : 'idc-stat-damage-pre-main';
-      //   const damagePreEl = damageEl.getElementsByClassName(classToFind)[0];
-      //   damagePreEl.style.color = FontColors[ping.attribute];
-      //   damagePreEl.innerText = numberWithCommas(ping.amount);
 
-      //   const damagePostEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post'))[0];
-      //   damagePostEl.style.color = FontColors[ping.attribute];
-      //   damagePostEl.innerText = numberWithCommas(ping.rawDamage);
-      //   const actualDamageEl = postDamageEl.getElementsByClassName(classToFind.replace('pre', 'post') + '-actual')[0];
-      //   if (ping.rawDamage != ping.actualDamage) {
-      //     actualDamageEl.innerText = `(${numberWithCommas(ping.actualDamage)})`;
-      //     actualDamageEl.style.color = FontColors[ping.attribute];
-      //   } else {
-      //     actualDamageEl.innerText = '';
-      //   }
-      // }
     }
 
-    // const totalBaseStatEl = document.getElementById('idc-stat-base-6');
     document.getElementById('idc-stat-total-hp').innerText = `${this.getHp()}`;
     document.getElementById('idc-stat-total-rcv').innerText = `${this.getRcv()}`;
     for (let i = 0; i < 5; i++) {
       document.getElementById(`idc-stat-atk-${i}`).innerText = atkTotals[i];
     }
 
-    // const totalPreDamageEl = document.getElementById('idc-stat-damage-pre-total');
-    // totalPreDamageEl.innerText = numberWithCommas(pings.reduce((total, ping) => total + ping.amount, 0));
-    // const rawDamage = pings.reduce((total, ping) => total + ping.rawDamage, 0);
-    // const actualDamage = enemy.currentHp - currentHp;
-    // const totalPostDamageEl = document.getElementById('idc-stat-damage-post-total');
-    // totalPostDamageEl.innerText = numberWithCommas(rawDamage);
-    // const totalPostDamageActualEl = document.getElementById('idc-stat-damage-post-total-actual');
-    // totalPostDamageActualEl.innerText = rawDamage != actualDamage ? `(${actualDamage})` : '';
+    this.dungeon.reloadBattleElement();
   }
 
   createMonsterSelector() {
