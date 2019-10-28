@@ -1461,7 +1461,7 @@ class EnemyInstance {
     if (ping.source.countAwakening(IdcAwakening.GUARD_BREAK) == 0 ||
         (new Set(pings.map((ping) => ping.attribute))).size < 5) {
       const defense = this.defense * (100 - this.ignoreDefensePercent) / 100;
-      currentDamage -= this.defense;
+      currentDamage -= defense;
       currentDamage = Math.ceil(currentDamage);
 
       currentDamage = Math.max(currentDamage, 1);
@@ -1548,12 +1548,12 @@ class EnemyInstance {
 
 EnemyInstance.fromJson = (json) =>{
   const instance = new EnemyInstance();
-  instance.id = json.id;
-  instance.maxHp = json.maxHp;
-  instance.defense = json.defense;
-  instance.resolvePercent = json.resolvePercent;
-  instance.attributesResisted = json.attributesResisted;
-  instance.typesResisted = json.typesResisted;
+  instance.id = Number(json.id);
+  instance.maxHp = Number(json.maxHp);
+  instance.defense = Number(json.defense);
+  instance.resolvePercent = Number(json.resolvePercent);
+  instance.attributesResisted = json.attributesResisted.map((a) => Number(a));
+  instance.typesResisted = json.typesResisted.map((a) => Number(a));
   instance.preemptiveSkillset = json.preemptiveSkillset ?
       EnemySkillset.fromJson(json.preemptiveSkillset) : null;
   instance.skillsets = json.skillsets.map(
@@ -1898,7 +1898,7 @@ class DungeonInstance {
     defenseEditor.id = 'idc-enemy-defense';
     defenseEditor.type = 'number';
     defenseEditor.onchange = () => {
-      this.getActiveEnemy().defense = defenseEditor.value;
+      this.getActiveEnemy().defense = Number(defenseEditor.value);
       this.reloadBattleElement();
     }
     defenseValue.appendChild(defenseEditor);
