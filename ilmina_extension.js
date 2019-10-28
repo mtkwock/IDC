@@ -299,6 +299,8 @@ class MonsterInstance {
 
     this.card = null;
 
+    this.bound = false;
+
     if (this.id) {
       this.setId(this.id);
     }
@@ -1125,6 +1127,10 @@ class MonsterInstance {
 
   getAttribute() {
     return this.attribute >= 0 ? this.attribute : this.getCard().attribute;
+  }
+
+  getSubattribute() {
+    return this.getCard().subattribute == -1 || this.attribute == -1 ? this.getCard().subattribute : this.attribute;
   }
 }
 
@@ -1990,6 +1996,7 @@ class DungeonInstance {
   createBattleElement() {
     const el = document.createElement('div');
     el.id = 'idc-battle-opponent';
+    // Opponent Image.
     const opponentImage = document.createElement('img');
     opponentImage.id = 'idc-battle-opponent-img';
     const enemyId = this.getActiveEnemy().id;
@@ -2000,6 +2007,7 @@ class DungeonInstance {
     opponentImage.style.marginRight = 'auto';
     el.appendChild(opponentImage);
 
+    // HP Controller
     const enemyHpEl = document.createElement('div');
     enemyHpEl.style.paddingTop = '5px';
     enemyHpEl.style.paddingBottom = '10px';
@@ -2055,11 +2063,83 @@ class DungeonInstance {
 
     el.appendChild(enemyHpEl);
 
+    // Ping by ping damage.
     const damageTable = document.createElement('table');
     damageTable.style.fontSize = 'small';
     damageTable.style.textAlign = 'right';
+    const damageHeader = document.createElement('tr');
+    const idHeader = document.createElement('th');
+    idHeader.innerText = 'id';
+    damageHeader.appendChild(idHeader);
+    const boundHeader = document.createElement('th');
+    boundHeader.innerText = 'Bound';
+    damageHeader.appendChild(boundHeader);
+    const attrHeader = document.createElement('th');
+    attrHeader.innerText = 'Attr';
+    damageHeader.appendChild(attrHeader);
+    const baseDamageHeader = document.createElement('th');
+    baseDamageHeader.innerText = 'Base';
+    damageHeader.appendChild(baseDamageHeader);
+    const hitDamageHeader = document.createElement('th');
+    hitDamageHeader.innerText = 'Hit';
+    damageHeader.appendChild(hitDamageHeader);
+    const actualDamageHeader = document.createElement('th');
+    actualDamageHeader.innerText = 'Actual';
+    damageHeader.appendChild(actualDamageHeader);
+    damageTable.appendChild(damageHeader);
     for (let i = 0; i < 6; i++) {
       const damageRow = document.createElement('tr');
+      const idCell = document.createElement('td');
+      idCell.id = `idc-battle-damage-id-${i}`;
+      idCell.innerText = '-';
+      damageRow.appendChild(idCell);
+      const bindCell = document.createElement('td');
+      const bindCheckbox = document.createElement('input');
+      bindCheckbox.id = `idc-battle-damage-bound-${i}`;
+      bindCheckbox.type = 'checkbox';
+      bindCheckbox.onclick = () => {
+        // console.log('Bind checkbox clicked for ' + i);
+        this.idc.getActiveTeam()[i].bound = bindCheckbox.checked;
+        this.reloadBattleElement();
+      }
+      bindCell.appendChild(bindCheckbox);
+      damageRow.appendChild(bindCell);
+      const attributeOverride = document.createElement('td');
+      const attributeSelector = document.createElement('select');
+      attributeSelector.id = `idc-battle-damage-attr-${i}`;
+      attributeSelector.onchange = (e) => {
+        // console.log('Attribute selector changed. for ' + i);
+        // console.log(e);
+        this.idc.getActiveTeam()[i].attribute = Number(attributeSelector.value);
+        this.reloadBattleElement();
+      }
+      const optionNone = document.createElement('option');
+      optionNone.selected = true;
+      const optionFire = document.createElement('option');
+      const optionWater = document.createElement('option');
+      const optionWood = document.createElement('option');
+      const optionLight = document.createElement('option');
+      const optionDark = document.createElement('option');
+      optionNone.innerText = 'Self';
+      optionFire.innerText = 'Fire';
+      optionWater.innerText = 'Water';
+      optionWood.innerText = 'Wood';
+      optionLight.innerText = 'Light';
+      optionDark.innerText = 'Dark';
+      optionNone.value = -1;
+      optionFire.value = 0;
+      optionWater.value = 1;
+      optionWood.value = 2;
+      optionLight.value = 3;
+      optionDark.value = 4;
+      attributeSelector.appendChild(optionNone);
+      attributeSelector.appendChild(optionFire);
+      attributeSelector.appendChild(optionWater);
+      attributeSelector.appendChild(optionWood);
+      attributeSelector.appendChild(optionLight);
+      attributeSelector.appendChild(optionDark);
+      attributeOverride.appendChild(attributeSelector);
+      damageRow.appendChild(attributeOverride);
 
       const preDamageCell = document.createElement('td');
       const postDamageCell = document.createElement('td');
@@ -2111,6 +2191,13 @@ class DungeonInstance {
     }
 
     const totalRow = document.createElement('tr');
+    // Unused padding cells.
+    const td1 = document.createElement('td');
+    totalRow.appendChild(td1);
+    const td2 = document.createElement('td');
+    totalRow.appendChild(td2);
+    const td3 = document.createElement('td');
+    totalRow.appendChild(td3);
     const preDamageTotal = document.createElement('td');
     const postDamageTotal = document.createElement('td');
     const effectiveDamageTotal = document.createElement('td');
@@ -2120,9 +2207,10 @@ class DungeonInstance {
     preDamageTotal.innerText = '0';
     postDamageTotal.innerText = '0';
     effectiveDamageTotal.innerText = '0';
-    damageTable.appendChild(preDamageTotal);
-    damageTable.appendChild(postDamageTotal);
-    damageTable.appendChild(effectiveDamageTotal);
+    totalRow.appendChild(preDamageTotal);
+    totalRow.appendChild(postDamageTotal);
+    totalRow.appendChild(effectiveDamageTotal);
+    damageTable.appendChild(totalRow);
     // TODO: Add controllers for buffs and debuffs.
 
     el.appendChild(damageTable);
@@ -2162,7 +2250,14 @@ class DungeonInstance {
 
     for (let i = 0; i < 6; i++) {
       const mainColor = FontColors[activeTeam[i].getAttribute()];
-      const subColor = FontColors[activeTeam[i].getCard().subattribute];
+      const subColor = FontColors[activeTeam[i].getSubattribute()] ;
+
+      const idEl = document.getElementById(`idc-battle-damage-id-${i}`);
+      idEl.innerText = activeTeam[i].id in vm.model.cards ? activeTeam[i].id : '-';
+      const boundEl = document.getElementById(`idc-battle-damage-bound-${i}`);
+      boundEl.checked = activeTeam[i].bound;
+      const attrEl = document.getElementById(`idc-battle-damage-attr-${i}`);
+      attrEl.value = String(activeTeam[i].attribute);
 
       const preDamageMain = document.getElementById(`idc-battle-damage-pre-main-${i}`);
       preDamageMain.innerText = '0';
@@ -3555,12 +3650,12 @@ class Idc {
     this.combos.bonusCombos = 0;
 
     let monsters = this.getActiveTeam();
-    const lead = getLeaderSkillEffects(monsters[0].getCard().leaderSkillId);
-    const helper = getLeaderSkillEffects(monsters[5].getCard().leaderSkillId);
+    const lead = monsters[0].bound ? copyBase() : getLeaderSkillEffects(monsters[0].getCard().leaderSkillId);
+    const helper = monsters[5].bound ? copyBase() : getLeaderSkillEffects(monsters[5].getCard().leaderSkillId);
     const MP = this.isMultiplayer();
     const percent = this.getHpPercent();
     function countAwakenings(awakening){
-      return monsters.reduce((total, monster) => total + monster.countAwakening(awakening, MP), 0);
+      return monsters.reduce((total, monster) => total + (monster.bound ? 0 : monster.countAwakening(awakening, MP)), 0);
     }
 
     const enhancedCounts = {
@@ -3589,9 +3684,12 @@ class Idc {
 
     // Set up pings.
     for (let i = 0; i < monsters.length; i++) {
+      if (monsters[i].bound) {
+        continue;
+      }
       pings[i] = new DamagePing(monsters[i], monsters[i].attribute >= 0 ? monsters[i].attribute : monsters[i].getCard().attribute);
-      if (monsters[i].getCard().subattribute) {
-        pings[i + monsters.length] = new DamagePing(monsters[i], monsters[i].getCard().subattribute, true);
+      if (monsters[i].getCard().subattribute >= 0) {
+        pings[i + monsters.length] = new DamagePing(monsters[i], monsters[i].getSubattribute(), true);
       }
     }
     pings = pings.filter((ping) => !!ping);
@@ -3615,7 +3713,7 @@ class Idc {
           }
           let multiplier = baseMultiplier;
           if (ping.isSub) {
-            if (ping.attribute == ping.source.getCard().attribute) {
+            if (ping.attribute == ping.source.getAttribute()) {
               multiplier /= 10;
             } else {
               multiplier /= 3;
