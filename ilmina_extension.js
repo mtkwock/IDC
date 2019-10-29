@@ -2029,7 +2029,6 @@ class DungeonInstance {
     enemyHpSlider.style.height = '5px';
     enemyHpSlider.style.marginBottom = '5px';
     enemyHpSlider.onchange = () => {
-      // console.log('Enemy HP Slider changed to ' + enemyHpSlider.value);
       this.getActiveEnemy().currentHp = Math.round(Number(enemyHpSlider.value));
       this.reloadBattleElement();
     };
@@ -2040,7 +2039,6 @@ class DungeonInstance {
     enemyHpInput.type = 'number';
     enemyHpInput.style.width = '100px';
     enemyHpInput.onchange = () => {
-      // console.log('Enemy HP Input changed to ' + enemyHpInput.value);
       const enemy = this.getActiveEnemy();
       enemy.currentHp = Number(enemyHpInput.value);
       if (enemy.currentHp > enemy.maxHp) {
@@ -2086,7 +2084,6 @@ class DungeonInstance {
     statusCheckbox.id = 'idc-battle-opponent-status';
     statusCheckbox.type = 'checkbox';
     statusCheckbox.onclick = () => {
-      // console.log('Status checkbox set to ' + statusCheckbox.checked);
       this.getActiveEnemy().statusShield = statusCheckbox.checked;
       this.reloadBattleElement();
     };
@@ -2105,14 +2102,12 @@ class DungeonInstance {
       }
       this.getActiveEnemy().shieldPercent = value;
       this.reloadBattleElement();
-      // console.log('Shield input set to ' + shieldInput.value);
     };
     const opponentAttributeSetter = document.createElement('select');
     opponentAttributeSetter.id = 'idc-battle-opponent-attribute';
     opponentAttributeSetter.onchange = () => {
       this.getActiveEnemy().currentAttribute = opponentAttributeSetter.value;
       this.reloadBattleElement();
-      // console.log('Opponent attribute set to ' + opponentAttributeSetter.value);
     }
     const optionMain = document.createElement('option');
     optionMain.innerText = 'Main';
@@ -2155,9 +2150,9 @@ class DungeonInstance {
     damageAbsorbInput.id = 'idc-battle-opponent-absorb-damage';
     damageAbsorbInput.type = 'number';
     damageAbsorbInput.value = -1;
+    damageAbsorbInput.style.width = '100px';
 
     damageAbsorbInput.onchange = () => {
-      // console.log('Damage absorb set to ' + damageAbsorbInput.value);
       let value = Number(damageAbsorbInput.value);
       if (value <= 0) {
         value = -1;
@@ -2179,7 +2174,6 @@ class DungeonInstance {
       }
       this.getActiveEnemy().comboAbsorb = value;
       this.reloadBattleElement();
-      // console.log('Combo absorb set to ≤' + comboAbsorbInput.value);
     };
 
     const attrAbsorbEl = document.createElement('div');
@@ -2189,15 +2183,13 @@ class DungeonInstance {
       absorbSpan.style.cursor = 'pointer';
       absorbSpan.selected = false;
       absorbSpan.innerText = COLORS[i].toUpperCase();
-      // let lastBorder = String(absorbSpan.style.border);
       absorbSpan.onmouseover = () => {
-        absorbSpan.style.border = absorbSpan.selected ? '' : BORDER_COLOR;
+        absorbSpan.style.backgroundColor = 'darkgray';
       };
       absorbSpan.onmouseleave = () => {
-        absorbSpan.style.border = absorbSpan.selected ? BORDER_COLOR : '';
+        absorbSpan.style.backgroundColor = '';
       };
       absorbSpan.onclick = () => {
-        console.log('Absorb el clicked: ' + i);
         const absorbed = this.getActiveEnemy().attributeAbsorb;
         if (absorbed.includes(i)) {
           absorbed.splice(absorbed.indexOf(i), 1);
@@ -2220,8 +2212,8 @@ class DungeonInstance {
     voidInput.id = 'idc-battle-opponent-void';
     voidInput.type = 'number';
     voidInput.value = 0;
+    voidInput.style.width = '100px';
     voidInput.onchange = () => {
-      // console.log('Void input set to ' + voidInput.value);
       let value = Number(voidInput.value);
       if (value <= 0) {
         value = -1;
@@ -2235,7 +2227,6 @@ class DungeonInstance {
     defBreakInput.style.width = '45px';
     defBreakInput.value = 0;
     defBreakInput.onchange = () => {
-      // console.log('Defense break set to ' + defBreakInput.value);
       let value = Number(defBreakInput.value);
       if (value < 0) {
         value = 0;
@@ -2299,7 +2290,6 @@ class DungeonInstance {
       bindCheckbox.id = `idc-battle-damage-bound-${i}`;
       bindCheckbox.type = 'checkbox';
       bindCheckbox.onclick = () => {
-        // console.log('Bind checkbox clicked for ' + i);
         this.idc.getActiveTeam()[i].bound = bindCheckbox.checked;
         this.reloadBattleElement();
       }
@@ -2309,8 +2299,6 @@ class DungeonInstance {
       const attributeSelector = document.createElement('select');
       attributeSelector.id = `idc-battle-damage-attr-${i}`;
       attributeSelector.onchange = (e) => {
-        // console.log('Attribute selector changed. for ' + i);
-        // console.log(e);
         this.idc.getActiveTeam()[i].attribute = Number(attributeSelector.value);
         this.reloadBattleElement();
       }
@@ -2466,7 +2454,7 @@ class DungeonInstance {
     const defBreak = document.getElementById('idc-battle-opponent-defbreak');
     defBreak.value = enemy.ignoreDefensePercent;
 
-    const {pings, bonusAttacks, healing, trueBonusAttacks} = this.idc.getDamagePre();
+    const {pings, bonusAttacks, healing, trueBonusAttack} = this.idc.getDamagePre();
     const activeTeam = this.idc.getActiveTeam();
     let currentHp = enemy.currentHp;
     // TODO: Figure out this precisely.
@@ -3949,7 +3937,7 @@ class Idc {
     // TODO: Handle bonus attacks separately.
     let healing = 0;
     let teamRcvAwakenings = 0;
-    const trueBonusAttacks = [0];
+    let trueBonusAttack = 0;
 
     // No matching conditionals for this recovery.
     const partialRcv = (lead, monster) => lead.rcv(monster, monsters, percent, this.skillUsed, MP);
@@ -3967,10 +3955,10 @@ class Idc {
         }
         if (combo.shape == Shape.COLUMN &&
             monster.countAwakening(IdcAwakening.BONUS_ATTACK, MP)) {
-          trueBonusAttacks[0] += 1;
+          trueBonusAttack += 1;
         }
         if (combo.shape == Shape.BOX) {
-          trueBonusAttacks[0] += (99 * monster.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER, MP));
+          trueBonusAttack += (99 * monster.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER, MP));
         }
         const rcvMult = (
             partialRcv(lead, monster) *
@@ -4067,6 +4055,9 @@ class Idc {
       ping.multiply(multiplier, Round.NEAREST);
     }
 
+    trueBonusAttack += lead.trueBonusAttack(monsters[0], monsters, percent, this.combos, this.skillUsed, MP);
+    trueBonusAttack += helper.trueBonusAttack(monsters[0], monsters, percent, this.combos, this.skillUsed, MP);
+
     // Handle damage cap.
     for (const ping of pings) {
       if (ping.amount >= 2147483648) {
@@ -4078,7 +4069,7 @@ class Idc {
     return {
       pings: pings,
       healing: healing,
-      trueBonusAttacks: trueBonusAttacks,  // TODO
+      trueBonusAttack: trueBonusAttack,  // TODO
       bonusAttacks: [], // TODO
     };
   }

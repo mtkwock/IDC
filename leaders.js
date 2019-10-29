@@ -43,10 +43,11 @@ const baseLeaderSkill = Object.freeze({
   heal: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 0;
   },
-  // Concatenating values.
+  // True pings are all in the same value.
   trueBonusAttack: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-    return [];
+    return 0;
   },
+  // Concatenating values.
   bonusAttack: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer, awakeningsActive) => {
     return [];
   },
@@ -56,12 +57,12 @@ const baseLeaderSkill = Object.freeze({
   },
 });
 
-function copyBase() {
+function copyBaseLeader() {
   return Object.assign({}, baseLeaderSkill);
 }
 
 function createLeaderSkill(configs) {
-  return Object.assign(copyBase(), configs);
+  return Object.assign(copyBaseLeader(), configs);
 }
 
 function idxsFromBits(bits) {
@@ -122,7 +123,7 @@ function combineLeaderSkills(ls1, ls2) {
     },
     // Concatenating comboContainer.
     trueBonusAttack: (...args) => {
-      return [...ls1.trueBonusAttack(...args), ...ls2.trueBonusAttack(...args)];
+      return ls1.trueBonusAttack(...args) + ls2.trueBonusAttack(...args);
     },
     bonusAttack: (...args) => {
       return [...ls1.bonusAttack(...args), ...ls2.bonusAttack(...args)];
@@ -878,23 +879,30 @@ function trueBonusFromLinkedOrbs(params) {
       for (const attr of attrs) {
         for (const combo of comboContainer.combos[COLOR_ORDER[attr]]) {
           if (combo.count > minLinked) {
-            return [damage];
+            return damage;
           }
         }
       }
-      return [];
+      return 0;
     }
   });
 }
 
 const LEADER_SKILL_GENERATORS = {
   12: bonusAttackScale,
+  // 13: autoheal,
+  // 14: resolve,
   15: pureTimeExtend,
   44: atkRcvFromMinHp,
   61: atkScalingFromMatchedColors,
+  // 63: hpRcvFromType,
+  // 64: atkRcvFromType
+  // 65: baseStatFromType,
   66: atkBoostFromMinCombos,
+  // 67: atkRcvFromColor,
   98: atkScalingFromCombos,
   101: atkBoostFromExactCombos,
+  // 107: hpDecrease,
   116: multipleLeaderSkills,
   119: atkScalingFromLinkedOrbs,
   122: atkRcvFromSubHp,
@@ -902,7 +910,13 @@ const LEADER_SKILL_GENERATORS = {
   129: baseStatFromAttributeType,
   130: atkRcvColorShieldFromSubHp,
   133: atkRcvFromSkillUse,
+  136: stackingStatboostsForAttributes,
+  // 137: stackingStatboostsForTypes,
   138: multipleLeaderSkills,
+  // 148: expMultiplier,
+  // 149: rcvFromHpa,
+  // 150: fiveOrbsOneEnhance,
+  // 151: heartCross,
   155: statBoostFromMultiplayer,
   159: atkScalingFromLinkedOrbs,
   162: bigBoardLeader,
@@ -925,7 +939,7 @@ function getLeaderSkillEffects(leaderSkillId) {
   const modelLeaderSkill = vm.model.playerSkills[leaderSkillId];
   if (!(modelLeaderSkill.internalEffectId in LEADER_SKILL_GENERATORS)) {
     console.warn(`Leader Skill ID ${leaderSkillId} not implemented, assuming no LS`);
-    return copyBase();
+    return copyBaseLeader();
   }
   return LEADER_SKILL_GENERATORS[modelLeaderSkill.internalEffectId](
       modelLeaderSkill.internalEffectArguments);
