@@ -1659,11 +1659,15 @@ class DungeonInstance {
       }
       option.onclick = () => {
         options.style.display = 'none';
-        enemySelector.value = option.value;
+        let value = Number(option.value);
+        if ((value + 100000) in vm.model.cards) {
+          value += 100000;
+        }
+        enemySelector.value = value;
         const enemy = this.getActiveEnemy();
         enemy.setId(enemySelector.value);
-        if (option.value in vm.model.cards) {
-          const card = vm.model.cards[option.value];
+        if (value in vm.model.cards) {
+          const card = vm.model.cards[value];
           // Hopefully good defaults.  May change!
           enemy.maxHp = card.unknownData[7];
           enemy.attack = card.unknownData[10];
@@ -1678,8 +1682,11 @@ class DungeonInstance {
     enemySelector.id = 'idc-selector-enemy';
     enemySelector.onkeyup = (e) => {
       if (e.keyCode == 13) {
-        const value = document.getElementById(`idc-enemy-select-option-0`).value;
-        console.log(`Changing monster id to ${value}`);
+        let value = Number(document.getElementById(`idc-enemy-select-option-0`).value);
+        if ((value + 100000) in vm.model.cards) {
+          value += 100000;
+        }
+        // console.log(`Changing monster id to ${value}`);
         const enemy = this.getActiveEnemy();
         enemy.setId(value);
         if (value in vm.model.cards) {
