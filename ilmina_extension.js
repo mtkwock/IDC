@@ -1371,8 +1371,10 @@ class EnemyInstance {
     currentDamage = Math.ceil(currentDamage);
 
     // Shield
-    currentDamage = currentDamage * (100 - this.shieldPercent) / 100
-    currentDamage = Math.ceil(currentDamage);
+    if (!ping.gravity) {
+      currentDamage = currentDamage * (100 - this.shieldPercent) / 100
+      currentDamage = Math.ceil(currentDamage);
+    }
 
     // Defense + Guard Break, Damage afterward is minimum 1.
     if ((ping.source.countAwakening(IdcAwakening.GUARD_BREAK) == 0 ||
