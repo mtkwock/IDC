@@ -1,16 +1,3 @@
-
-// chrome.runtime.onInstalled.addListener((val) => {
-//     // chrome.contextMenus.create({
-//     //   "id": "sampleContextMenu",
-//     //   "title": "Sample Context Menu",
-//     //   "contexts": ["selection"]
-//     // });
-// });
-
-// chrome.browserAction.onClicked.addListener((tab) => {
-//   alert('icon clicked');
-// });
-
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   console.log(message);
 
@@ -33,8 +20,8 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       link.setAttribute('href', canvasData);
       link.setAttribute('download', 'valeria-screenshot.png');
       link.click();
+      reply('Finished');
     };
     img.src = dataUri;
   });
-  reply('Hello');
 });

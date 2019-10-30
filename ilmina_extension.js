@@ -1113,18 +1113,18 @@ function testRoche() {
 }
 
 const EnemySkillEffect = {
-  NONE: null,
+  NONE: 'None',
   // MULTI_HIT: 'multi-hit', // #hits
   // GRAVITY: 'gravity', // %Gravity
-  STATUS_SHIELD: 'status-shield', // config unused.
-  DAMAGE_SHIELD: 'shield', // %shield (e.g. 50, 75)
+  STATUS_SHIELD: 'Status Shield', // config unused.
+  DAMAGE_SHIELD: 'Shield', // %shield (e.g. 50, 75)
   // SELF_HEAL: 'enemy-heal', // %heal (e.g. 10, 50, 100)
   // PLAYER_HEAL: 'player-heal', // %heal
-  DAMAGE_ABSORB: 'damage-absorb', // Minimum value absorbed.
-  ATTRIBUTE_ABSORB: 'attribute-absorb', // Flags, 1: Fire, 2: Water, 4: Wood, 8: Light, 16: Dark
-  COMBO_ABSORB: 'combo-absorb', // Max combos of the absorb.
+  DAMAGE_ABSORB: 'Damage Absorb', // Minimum value absorbed.
+  ATTRIBUTE_ABSORB: 'Attribute Absorb', // Flags, 1: Fire, 2: Water, 4: Wood, 8: Light, 16: Dark
+  COMBO_ABSORB: 'Combo Absorb', // Max combos of the absorb.
   // ENRAGE: 'enrage', // %Damage (e.g. 150, 200, 1000)
-  DAMAGE_VOID: 'damage-void', // Min damage voided
+  DAMAGE_VOID: 'Damage Void', // Min damage voided
   // CLEAR_BUFFS: 'clear', // config unused.
   // RCV_BUFF: 'rcv', // Percent RCV (e.g. 0, 25, 50, 300)
   // TIME_BUFF_FLAT: 'time-flat', // Time delta (e.g. -5, -2, +1, +5)
@@ -1145,7 +1145,7 @@ class EnemySkill {
   }
 
   apply(idc, source) {
-    console.warn('Enemy Skills not handled yet');
+    // console.warn('Enemy Skills not handled yet');
     switch(this.effect) {
       case EnemySkillEffect.NONE:
         break;
@@ -1210,7 +1210,7 @@ class EnemySkillset {
   }
 
   applySkillset(idc, source) {
-    console.warn('Enemy skillset application not supported yet.');
+    // console.warn('Enemy skillset application not supported yet.');
     for (const skill of this.skills) {
       skill.apply(idc, source);
     }
@@ -1652,8 +1652,8 @@ class DungeonInstance {
       return;
     }
     this.floors.splice(idx, 1);
-    if (this.activeFloor == idx) {
-      this.activeFloor--;
+    if (this.activeFloor >= idx) {
+      this.activeFloor = idx - 1;
     }
     this.reloadEditorElement();
     this.reloadBattleElement();
@@ -1738,29 +1738,40 @@ class DungeonInstance {
       skillset = this.getActiveEnemy().skillsets[i];
     }
 
+    const removeSkillset = document.createElement('div');
+    if (i != -1) {
+      removeSkillset.innerText = '[-]';
+      removeSkillset.onclick = () => {
+        this.getActiveEnemy().skillsets.splice(i, 1);
+        this.reloadEditorElement();
+      };
+    }
+
     const skillsetNameEditor = document.createElement('input');
+    skillsetNameEditor.placeholder = 'Skillset Name';
     skillsetNameEditor.value = skillset.name;
     skillsetNameEditor.onchange = () => {
       skillset.name = skillsetNameEditor.value;
       this.reloadBattleElement();
     };
     const addSkill = document.createElement('span');
-    addSkill.innerText = '+';
+    addSkill.innerText = 'Add Skill';
     addSkill.onclick = () => {
       skillset.skills.push(new EnemySkill());
       this.reloadEditorElement();
     }
-    const removeSkill = document.createElement('span');
-    if (i != -1) {
-      removeSkill.innerText = '-';
-      removeSkill.onclick = () => {
-        skillset.skills.splice(i, 1);
-        this.reloadEditorElement();
-      }
-    }
     const skillsetTable = document.createElement('table');
     for (let j = 0; j < skillset.skills.length; j++) {
       const row = document.createElement('tr');
+
+      const removeSkillCell = document.createElement('td');
+      removeSkillCell.innerText = '[-]';
+      removeSkillCell.onclick = () => {
+        skillset.skills.splice(j, 1);
+        this.reloadEditorElement();
+      }
+      row.appendChild(removeSkillCell);
+
       const skillTypeCell = document.createElement('td');
       const skillTypeSelect = document.createElement('select');
       skillTypeSelect.style.fontSize = 'small';
@@ -1795,6 +1806,7 @@ class DungeonInstance {
 
     el.appendChild(skillsetNameEditor);
     el.appendChild(addSkill);
+    // el.appendChild(removeSkill);
     el.appendChild(skillsetTable);
     return el;
   }
@@ -1940,7 +1952,18 @@ class DungeonInstance {
     // this.turnCounter = 1; // Not to be used yet.
     enemyEditor.appendChild(enemyStatEditTable);
 
+    const preemptiveLabel = document.createElement('div');
+    preemptiveLabel.style.marginTop = '5px';
+    preemptiveLabel.style.fontSize = 'medium';
+    preemptiveLabel.innerText = 'Preemptive';
+    enemyEditor.appendChild(preemptiveLabel);
     enemyEditor.appendChild(this.createSkillsetEditor(-1));
+
+    const skillsetEditorLabel = document.createElement('div');
+    skillsetEditorLabel.style.fontSize = 'medium';
+    skillsetEditorLabel.style.marginTop = '5px';
+    skillsetEditorLabel.innerText = 'Skillsets';
+    enemyEditor.appendChild(skillsetEditorLabel);
 
     const addSkillset = document.createElement('div');
     addSkillset.style.fontSize = 'normal';
@@ -1963,7 +1986,7 @@ class DungeonInstance {
     dungeonContainer.style.padding = '5px';
     const titleSetter = document.createElement('input');
     titleSetter.id = 'idc-dungeon-editor-title'
-    titleSetter.width = '100%';
+    titleSetter.style.width = '100%';
     titleSetter.onkeyup = () => {
       this.title = titleSetter.value;
     };
@@ -2355,6 +2378,7 @@ class DungeonInstance {
     const damageTable = document.createElement('table');
     damageTable.style.fontSize = 'small';
     damageTable.style.textAlign = 'right';
+    damageTable.style.marginTop = '5px';
     const damageHeader = document.createElement('tr');
     const idHeader = document.createElement('th');
     idHeader.innerText = 'id';
@@ -2398,6 +2422,7 @@ class DungeonInstance {
       const attributeOverride = document.createElement('td');
       const attributeSelector = document.createElement('select');
       attributeSelector.id = `idc-battle-damage-attr-${i}`;
+      attributeSelector.style.fontSize = 'small';
       attributeSelector.onchange = (e) => {
         this.idc.getActiveTeam()[i].attribute = Number(attributeSelector.value);
         this.reloadBattleElement();
@@ -2513,11 +2538,18 @@ class DungeonInstance {
     const el = document.createElement('div');
     el.id = 'idc-battle-opponent';
     el.style.width = '400px';
+    // Opponent Name.
+    const opponentName = document.createElement('div');
+    opponentName.id = 'idc-battle-opponent-name';
+    opponentName.style.fontSize = 'large';
+    opponentName.innerText = 'Battle Master Dragon Caller, Valeria';
+    el.appendChild(opponentName);
+
     // Opponent Image.
     const opponentImage = document.createElement('img');
     opponentImage.id = 'idc-battle-opponent-img';
     const enemyId = this.getActiveEnemy().id;
-    opponentImage.src = enemyId in vm.model.cards ? CardAssets.getCroppedPortrait(vm.model.cards[enemyId]) : '';
+    opponentImage.src = CardAssets.getCroppedPortrait(vm.model.cards[(enemyId in vm.model.cards) ? enemyId : 4800]);
     opponentImage.style.maxWidth = '350px';
     opponentImage.style.display = 'block';
     opponentImage.style.marginLeft = 'auto';
@@ -2530,8 +2562,15 @@ class DungeonInstance {
     // Setter for various opponent values
     el.appendChild(this.createOpponentSetter());
 
+    // What action to take.  0 is Combos, 1-36 are actives.
+    const actionLabel = document.createElement('div');
+    actionLabel.style.display = 'inline-block';
+    actionLabel.style.marginTop = '5px';
+    actionLabel.innerText = 'Action: ';
+
     const actionSelect = document.createElement('select');
     actionSelect.id = 'idc-battle-action-select';
+    actionSelect.style.fontSize = 'x-small';
     for (const option of this.createActionOptions()) {
       actionSelect.appendChild(option);
     }
@@ -2541,6 +2580,7 @@ class DungeonInstance {
       this.reloadBattleElement();
     }
 
+    el.appendChild(actionLabel);
     el.appendChild(actionSelect);
 
     // Ping by ping damage.
@@ -2550,9 +2590,14 @@ class DungeonInstance {
 
   reloadBattleElement() {
     // Update image.
-    const enemy = this.getActiveEnemy();
+    let enemy = this.getActiveEnemy();
+    if (!(enemy.id in vm.model.cards)) {
+      enemy = new EnemyInstance();
+      enemy.setId(4800);
+    }
+    document.getElementById('idc-battle-opponent-name').innerText = enemy.getCard().name;
     const opponentImage = document.getElementById('idc-battle-opponent-img');
-    opponentImage.src = enemy.id in vm.model.cards ? CardAssets.getCroppedPortrait(vm.model.cards[enemy.id]) : '';
+    opponentImage.src = CardAssets.getCroppedPortrait(vm.model.cards[enemy.id]);
 
     // Update HP elements.
     const hpSlider = document.getElementById('idc-battle-opponent-hp-slider');
@@ -2607,13 +2652,15 @@ class DungeonInstance {
 
     // Reload Damage Table.
     const {pings, bonusAttacks, healing, trueBonusAttack} = this.idc.getDamagePre();
-    const bonusAttack = new DamagePing();
-    bonusAttack.amount = trueBonusAttack;
-    bonusAttack.attribute = -1;
-    bonusAttack.isActive = true;
-    bonusAttack.isSub = true;
-    bonusAttack.source = activeTeam[5];
-    pings.push(bonusAttack);
+    if (trueBonusAttack) {
+      const bonusAttack = new DamagePing();
+      bonusAttack.amount = trueBonusAttack;
+      bonusAttack.attribute = -1;
+      bonusAttack.isActive = true;
+      bonusAttack.isSub = true;
+      bonusAttack.source = activeTeam[5];
+      pings.push(bonusAttack);
+    }
 
     let currentHp = enemy.currentHp;
     // TODO: Figure out this precisely.
@@ -2631,9 +2678,12 @@ class DungeonInstance {
       currentHp = next;
     }
 
-    if (bonusAttack.resolveTriggered) {
-      bonusAttack.actualDamage++;
-      currentHp = 0;
+    if (trueBonusAttack) {
+      const bonusAttack = pings[pings.length - 1];
+      if (bonusAttack.resolveTriggered) {
+        bonusAttack.actualDamage++;
+        currentHp = 0;
+      }
     }
 
 
@@ -2678,16 +2728,16 @@ class DungeonInstance {
         effectiveDamage.style.color = FontColors[ping.attribute];
 
         if (preDamage.innerText) {
-          preDamage.innerText += ' ' + numberWithCommas(ping.amount);
-          postDamage.innerText += ' ' + numberWithCommas(ping.rawDamage);
+          preDamage.innerText += ' +' + numberWithCommas(ping.amount);
+          postDamage.innerText += ' +' + numberWithCommas(ping.rawDamage);
           if (ping.actualDamage != ping.rawDamage) {
-            effectiveDamage.innerText += ' ' + (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
+            effectiveDamage.innerText += ' +' + (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
           }
         } else {
           preDamage.innerText = numberWithCommas(ping.amount);
           postDamage.innerText = numberWithCommas(ping.rawDamage);
           if (ping.actualDamage != ping.rawDamage) {
-            effectiveDamage.innerText += ' ' + (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
+            effectiveDamage.innerText = (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
           }
         }
       }
@@ -4014,8 +4064,8 @@ class Idc {
     this.combos.bonusCombos = 0;
 
     let monsters = this.getActiveTeam();
-    const lead = monsters[0].bound ? copyBase() : getLeaderSkillEffects(monsters[0].getCard().leaderSkillId);
-    const helper = monsters[5].bound ? copyBase() : getLeaderSkillEffects(monsters[5].getCard().leaderSkillId);
+    const lead = monsters[0].bound ? copyBaseLeader() : getLeaderSkillEffects(monsters[0].getCard().leaderSkillId);
+    const helper = monsters[5].bound ? copyBaseLeader() : getLeaderSkillEffects(monsters[5].getCard().leaderSkillId);
     const MP = this.isMultiplayer();
     const percent = this.getHpPercent();
     function countAwakenings(awakening){

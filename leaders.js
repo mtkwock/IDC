@@ -916,10 +916,15 @@ const LEADER_SKILL_GENERATORS = {
   200: trueBonusFromLinkedOrbs,
 };
 
+const warnedLs = new Set();
+
 function getLeaderSkillEffects(leaderSkillId) {
   const modelLeaderSkill = vm.model.playerSkills[leaderSkillId];
   if (!(modelLeaderSkill.internalEffectId in LEADER_SKILL_GENERATORS)) {
-    console.warn(`Leader Skill ID ${leaderSkillId} not implemented, assuming no LS`);
+    if (!warnedLs.has(modelLeaderSkill.internalEffectId)) {
+      console.warn(`Leader Skill ID ${leaderSkillId} not implemented, assuming no LS`);
+      warnedLs.add(modelLeaderSkill.internalEffectId);
+    }
     return copyBaseLeader();
   }
   return LEADER_SKILL_GENERATORS[modelLeaderSkill.internalEffectId](
