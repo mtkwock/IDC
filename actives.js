@@ -229,12 +229,29 @@ function scalingAttackAndHeal(params) {
   const [atk100, drain100] = params;
 
   return createActiveSkill({
-    description: `Deal ${atk100 / 100}x Self-Attribute Attack and heal ${drain100}%.`,
+    description: `${atk100 / 100}x Self-Attribute Attack and heal ${drain100}%.`,
     healFromDamage: drain100 / 100,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
       ping.source = source;
       ping.attribute = source.getAttribute();
+      ping.amount = source.getAtk(isMultiplayer, awakeningsActive);
+      ping.multiply(atk100 / 100, Round.UP);
+      ping.isActive = true;
+      return [ping];
+    },
+  });
+}
+
+// 37
+function scalingAttackToOneEnemy(params) {
+  const [attr, atk100] = params;
+  return createActiveSkill({
+    description: `Single-Target ${atk100/100}x ${AttributeToName[attr]} Attack.`,
+    damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
+      const ping = new DamagePing();
+      ping.source = source;
+      ping.attribute = attr;
       ping.amount = source.getAtk(isMultiplayer, awakeningsActive);
       ping.multiply(atk100 / 100, Round.UP);
       ping.isActive = true;
@@ -666,6 +683,7 @@ const ACTIVE_SKILL_GENERATORS = {
   19: defenseBreak,
   18: delay,
   35: scalingAttackAndHeal,
+  37: scalingAttackToOneEnemy,
   42: flatAttackToAttribute,
   50: attrOrRcvBurst,
   51: massAttack,

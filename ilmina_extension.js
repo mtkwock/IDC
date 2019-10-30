@@ -2281,7 +2281,7 @@ class DungeonInstance {
     optionDark.value = 4;
     opponentAttributeSetter.appendChild(optionDark);
 
-    opponentSetterCells[0].innerText = 'Status';
+    opponentSetterCells[0].innerText = 'St. Shield';
     opponentSetterCells[1].appendChild(statusCheckbox);
     opponentSetterCells[2].innerText = 'Shield';
     opponentSetterCells[3].appendChild(shieldInput);
@@ -2391,7 +2391,7 @@ class DungeonInstance {
 
     opponentSetterCells[12].innerText = '>=Void';
     opponentSetterCells[13].appendChild(voidInput);
-    opponentSetterCells[14].innerText = '%DefBreak';
+    opponentSetterCells[14].innerText = 'DefBreak%';
     opponentSetterCells[15].appendChild(defBreakInput);
     opponentSetterCells[16].innerText = 'Enrage%';
     opponentSetterCells[17].appendChild(enrageInput);
