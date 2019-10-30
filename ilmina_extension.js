@@ -2027,6 +2027,33 @@ class DungeonInstance {
     const dungeonContainer = document.createElement('div');
     dungeonContainer.id = 'idc-dungeon-editor';
     dungeonContainer.style.padding = '5px';
+
+    const ioArea = document.createElement('textarea');
+    ioArea.style.height = '30px';
+    ioArea.style.width = '100%';
+    ioArea.onclick = () => {
+      ioArea.select();
+    };
+    dungeonContainer.appendChild(ioArea);
+    dungeonContainer.appendChild(document.createElement('br'));
+
+    const exportButton = document.createElement('button');
+    exportButton.innerText = 'Export Dungeon';
+    exportButton.onclick = () => {
+      ioArea.value = JSON.stringify(this.toJson());
+      ioArea.select();
+    };
+    const importButton = document.createElement('button');
+    importButton.innerText = 'Import Dungeon';
+    importButton.onclick = () => {
+      const json = JSON.parse(ioArea.value);
+      this.loadJson(json);
+      this.reloadEditorElement();
+      this.reloadBattleElement();
+    };
+    dungeonContainer.appendChild(exportButton);
+    dungeonContainer.appendChild(importButton);
+
     const titleSetter = document.createElement('input');
     titleSetter.placeholder = 'Dungeon Name';
     titleSetter.id = 'idc-dungeon-editor-title'
@@ -2811,7 +2838,7 @@ class DungeonInstance {
     };
   }
 
-  loadJson(json, idc) {
+  loadJson(json) {
     this.title = json.title;
     this.floors = json.floors.map((floor) => DungeonFloor.fromJson(floor));
     this.activeFloor = 0;
