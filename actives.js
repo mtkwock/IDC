@@ -498,7 +498,7 @@ function grudgeStrike(params) {
   return createActiveSkill({
     description: `${isSingleTarget ? 'Single Target' : 'Mass'} ${baseMult / 100}-${maxMult / 100}x ${AttributeToName[attr]} Grudge Strike.`,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy, currentHp, maxHp) => {
-      console.warn('Grudge Strike calculations KNOWN to be off by a few points of damage, beware!');
+      // console.warn('Grudge Strike calculations KNOWN to be off by a few points of damage, beware!');
       const ping = new DamagePing();
       ping.attribute = attr;
       ping.isActive = true;

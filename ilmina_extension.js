@@ -206,15 +206,51 @@ class MonsterInstance {
       string += 'sdr';
     }
 
+    const card = this.getCard();
+
     if (this.inheritId in vm.model.cards) {
-      string += ` (${this.inheritId} | lv${this.inheritLevel} +${this.inheritPlussed ? 297 : 0})`;
+      string += ` (${this.inheritId}`;
+      if (this.getInheritCard().attribute == card.attribute) {
+        string += ' |';
+        if (this.inheritLevel != 1) {
+          string += ` lv${this.inheritLevel}`;
+        }
+        if (this.inheritPlussed) {
+          string += ' +297';
+        }
+      }
+      string += ')'
     }
 
     if (this.latents.length) {
-      string += '[' + this.latents.map((latent) => LatentToPdchu.get(latent)).join(',') + ']';
+      const counts = {};
+      for (const latent of this.latents) {
+        const name = LatentToPdchu.get(latent);
+        if (name in counts) {
+          counts[name]++;
+        } else {
+          counts[name] = 1;
+        }
+      }
+      string += '[';
+      for (const name in counts) {
+        if (counts[name] == 1) {
+          string += name + ',';
+        } else {
+          string += name + `*${counts[name]},`;
+        }
+      }
+      string = string.substring(0, string.length - 1) + ']';
     }
 
-    string += ` | lv${this.level} aw${this.awakenings}`;
+    string += ' |';
+
+    if (this.level != card.maxLevel) {
+      string += ` lv${this.level} `
+    }
+    if (this.awakenings != card.awakenings.length) {
+      string += `aw${this.awakenings}`;
+    }
     if (this.hpPlus != 99 || this.atkPlus != 99 || this.rcvPlus != 99) {
       string += ` +H${this.hpPlus} +A${this.atkPlus} +R${this.rcvPlus}`;
     }
@@ -286,7 +322,7 @@ class MonsterInstance {
           }
         }
       }
-      s = s.replace(assistNameMatch[0], '').trim();
+      s = s.replace(assistMatch[0], '').trim();
     }
 
     let latentMatch = s.match(LATENT_REGEX);
@@ -1145,19 +1181,25 @@ class EnemySkill {
   }
 
   toJson() {
-    return {
-      effect: this.effect,
-      config: this.config,
-      damagePercent: this.damagePercent,
-    };
+    const obj = {};
+    if (this.effect != EnemySkillEffect.NONE) {
+      obj.effect = this.effect;
+    }
+    if (this.config) {
+      obj.config = this.config;
+    }
+    if (this.damagePercent) {
+      obj.damagePercent = this.damagePercent;
+    }
+    return obj;
   }
 }
 
 EnemySkill.fromJson = (json) => {
   const skill = new EnemySkill();
-  skill.damagePercent = json.damagePercent;
-  skill.effect = json.effect;
-  skill.config = json.config;
+  skill.damagePercent = json.damagePercent || 0;
+  skill.effect = json.effect || EnemySkillEffect.NONE;
+  skill.config = json.config || 0;
   return skill;
 }
 
@@ -1178,17 +1220,21 @@ class EnemySkillset {
   }
 
   toJson() {
-    return {
-      name: this.name,
-      skills: this.skills.map((skill) => skill.toJson()),
-    };
+    const obj = {};
+    if (this.skills.length) {
+      obj.skills = this.skills.map((skill) => skill.toJson());
+    }
+    if (this.name) {
+      obj.name = this.name;
+    }
+    return obj;
   }
 }
 
 EnemySkillset.fromJson = (json) => {
   const skillset = new EnemySkillset();
-  skillset.name = json.name;
-  skillset.skills = json.skills.map((skillJson) => EnemySkill.fromJson(skillJson));
+  skillset.name = json.name || '';
+  skillset.skills = (json.skills || []).map((skillJson) => EnemySkill.fromJson(skillJson));
   return skillset;
 }
 
@@ -1415,33 +1461,53 @@ class EnemyInstance {
   }
 
   toJson() {
-    return {
-      id: this.id,
+    const obj = {
       maxHp: this.maxHp,
-      defense: this.defense,
-      resolvePercent: this.resolvePercent,
-      attributesResisted: [...this.attributesResisted],
-      typesResisted: [...this.typesResisted],
-      preemptiveSkillset: this.preemptiveSkillset ? this.preemptiveSkillset.toJson() : null,
-      skillsets: this.skillsets.map((skillset) => skillset.toJson()),
-      turnCounter: this.turnCounter,
     };
+    if (this.id in vm.model.cards) {
+      obj.id = this.id;
+    }
+    if (this.defense) {
+      obj.defense = this.defense;
+    }
+    if (this.resolvePercent > 0) {
+      obj.resolvePercent = this.resolvePercent;
+    }
+    if (this.attributesResisted.length) {
+      obj.attributesResisted = [...this.attributesResisted];
+    }
+    if (this.typesResisted.length) {
+      obj.typesResisted = [...this.typesResisted];
+    }
+    if (this.preemptiveSkillset) {
+      const preemptiveJson = this.preemptiveSkillset.toJson();
+      if (Object.values(preemptiveJson).length) {
+        obj.preemptiveSkillset = preemptiveJson;
+      }
+    }
+    if (this.skillsets.length) {
+      obj.skillsets = this.skillsets.map((skillset) => skillset.toJson());
+    }
+    if (this.turnCounter != 1) {
+      obj.turnCounter = this.turnCounter;
+    }
+    return obj;
   }
 }
 
 EnemyInstance.fromJson = (json) =>{
   const instance = new EnemyInstance();
-  instance.id = Number(json.id);
-  instance.maxHp = Number(json.maxHp);
-  instance.defense = Number(json.defense);
-  instance.resolvePercent = Number(json.resolvePercent);
-  instance.attributesResisted = json.attributesResisted.map((a) => Number(a));
-  instance.typesResisted = json.typesResisted.map((a) => Number(a));
+  instance.id = Number(json.id) || -1;
+  instance.maxHp = Number(json.maxHp) || 1;
+  instance.defense = Number(json.defense) || 0;
+  instance.resolvePercent = Number(json.resolvePercent) || 0;
+  instance.attributesResisted = (json.attributesResisted || []).map((a) => Number(a));
+  instance.typesResisted = (json.typesResisted || []).map((a) => Number(a));
   instance.preemptiveSkillset = json.preemptiveSkillset ?
       EnemySkillset.fromJson(json.preemptiveSkillset) : new EnemySkillset();
-  instance.skillsets = json.skillsets.map(
+  instance.skillsets = (json.skillsets || []).map(
       (skillsetJson) => EnemySkillset.fromJson(skillsetJson));
-  instance.turnCounter = json.turnCount;
+  instance.turnCounter = json.turnCount || 1;
   instance.reset();
   return instance;
 };
@@ -2832,14 +2898,17 @@ class DungeonInstance {
   }
 
   toJson() {
-    return {
-      title: this.title,
+    const obj = {
       floors: this.floors.map((floor) => floor.toJson()),
     };
+    if (this.title) {
+      obj.title = this.title;
+    };
+    return obj;
   }
 
   loadJson(json) {
-    this.title = json.title;
+    this.title = json.title || '';
     this.floors = json.floors.map((floor) => DungeonFloor.fromJson(floor));
     this.activeFloor = 0;
     this.reloadEditorElement();
