@@ -1114,31 +1114,30 @@ function testRoche() {
 
 const EnemySkillEffect = {
   NONE: null,
-  MULTI_HIT: 'multi-hit', // #hits
-  GRAVITY: 'gravity', // %Gravity
-  STATUS_SHIELD: 'status', // config unused.
+  // MULTI_HIT: 'multi-hit', // #hits
+  // GRAVITY: 'gravity', // %Gravity
+  STATUS_SHIELD: 'status-shield', // config unused.
   DAMAGE_SHIELD: 'shield', // %shield (e.g. 50, 75)
-  SELF_HEAL: 'enemy-heal', // %heal (e.g. 10, 50, 100)
-  PLAYER_HEAL: 'player-heal', // %heal
-  DAMAGE_ABSORB: 'damage', // Minimum value absorbed.
-  ATTRIBUTE_ABSORB: 'attribute', // Flags, 1: Fire, 2: Water, 4: Wood, 8: Light, 16: Dark
-  COMBO_ABSORB: 'combo', // Max combos of the absorb.
-  ENRAGE: 'enrage', // %Damage (e.g. 150, 200, 1000)
-  DAMAGE_VOID: 'void', // Min damage voided
-  CLEAR_BUFFS: 'clear', // config unused.
-  RCV_BUFF: 'rcv', // Percent RCV (e.g. 0, 25, 50, 300)
-  TIME_BUFF_FLAT: 'time-flat', // Time delta (e.g. -5, -2, +1, +5)
-  TIME_BUFF_SCALE: 'time-scale', // Time multiplier (e.g. 0.25, 0.5, 3)
+  // SELF_HEAL: 'enemy-heal', // %heal (e.g. 10, 50, 100)
+  // PLAYER_HEAL: 'player-heal', // %heal
+  DAMAGE_ABSORB: 'damage-absorb', // Minimum value absorbed.
+  ATTRIBUTE_ABSORB: 'attribute-absorb', // Flags, 1: Fire, 2: Water, 4: Wood, 8: Light, 16: Dark
+  COMBO_ABSORB: 'combo-absorb', // Max combos of the absorb.
+  // ENRAGE: 'enrage', // %Damage (e.g. 150, 200, 1000)
+  DAMAGE_VOID: 'damage-void', // Min damage voided
+  // CLEAR_BUFFS: 'clear', // config unused.
+  // RCV_BUFF: 'rcv', // Percent RCV (e.g. 0, 25, 50, 300)
+  // TIME_BUFF_FLAT: 'time-flat', // Time delta (e.g. -5, -2, +1, +5)
+  // TIME_BUFF_SCALE: 'time-scale', // Time multiplier (e.g. 0.25, 0.5, 3)
   // Not supporting.
-  ORB_CHANGE: 'orb-change',
-  BLIND: 'blind', // Unused config.
-  STICKY_BLIND: 'sticky-blind', // Config is [positions], turns
+  // ORB_CHANGE: 'orb-change',
+  // BLIND: 'blind', // Unused config.
+  // STICKY_BLIND: 'sticky-blind', // Config is [positions], turns
+  // AWAKENING_BIND: 'awakening-bind',
 };
 
 class EnemySkill {
   constructor() {
-    this.name = '';
-    this.description = '';
     // Percentage.  After applying gravity, HP is rounded up.
     this.effect = EnemySkillEffect.NONE;
     this.config = 0;
@@ -1148,36 +1147,37 @@ class EnemySkill {
   apply(idc, source) {
     console.warn('Enemy Skills not handled yet');
     switch(this.effect) {
-      case EnemySkillEffect.MULTI_HIT:
-      break;
-      case EnemySkillEffect.GRAVITY:
-      break;
-      case EnemySkillEffect.STATUS_SHIELD:
-      break;
-      case EnemySkillEffect.DAMAGE_SHIELD:
-      break;
-      case EnemySkillEffect.SELF_HEAL:
-      break;
-      case EnemySkillEffect.PLAYER_HEAL:
-      break;
-      case EnemySkillEffect.DAMAGE_ABSORB:
-      break;
-      case EnemySkillEffect.ATTRIBUTE_ABSORB:
-      break;
-      case EnemySkillEffect.ENRAGE:
-      break;
-      case EnemySkillEffect.DAMAGE_VOID:
-      break;
-      case EnemySkillEffect.CLEAR_BUFFS:
-      break;
-      case EnemySkillEffect.RCV_BUFF:
-      break;
-      case EnemySkillEffect.TIME_BUFF_FLAT:
-      break;
-      case EnemySkillEffect.TIME_BUFF_SCALE:
-      break;
       case EnemySkillEffect.NONE:
-      break;
+        break;
+      case EnemySkillEffect.STATUS_SHIELD:
+        source.statusShield = true;
+        break;
+      case EnemySkillEffect.DAMAGE_SHIELD:
+        source.shieldPercent = this.config;
+        break;
+      case EnemySkillEffect.DAMAGE_ABSORB:
+        source.damageAbsorb = this.config;
+        break;
+      case EnemySkillEffect.ATTRIBUTE_ABSORB:
+        source.attributeAbsorb = idxsFromBits(this.config);
+        break;
+      case EnemySkillEffect.DAMAGE_VOID:
+        source.damageVoid = this.config;
+        break;
+      case EnemySkillEffect.COMBO_ABSORB:
+        source.comboAbsorb = this.config;
+        break;
+      case EnemySkillEffect.ENRAGE:
+        source.enrage = this.config;
+        break;
+      // case EnemySkillEffect.MULTI_HIT:
+      // case EnemySkillEffect.GRAVITY:
+      // case EnemySkillEffect.SELF_HEAL:
+      // case EnemySkillEffect.PLAYER_HEAL:
+      // case EnemySkillEffect.CLEAR_BUFFS:
+      // case EnemySkillEffect.RCV_BUFF:
+      // case EnemySkillEffect.TIME_BUFF_FLAT:
+      // case EnemySkillEffect.TIME_BUFF_SCALE:
       default:
         console.warn('Unhandled type: ' + this.effect);
     }
@@ -1185,10 +1185,8 @@ class EnemySkill {
 
   toJson() {
     return {
-      name: this.name,
-      description: this.description,
       effect: this.effect,
-      config: this.effectConfig,
+      config: this.config,
       damagePercent: this.damagePercent,
     };
   }
@@ -1196,12 +1194,10 @@ class EnemySkill {
 
 EnemySkill.fromJson = (json) => {
   const skill = new EnemySkill();
-  skill.name = json.name;
-  skill.description = json.description;
   skill.damagePercent = json.damagePercent;
   skill.effect = json.effect;
   skill.config = json.config;
-  return effect;
+  return skill;
 }
 
 class EnemySkillset {
@@ -1209,6 +1205,7 @@ class EnemySkillset {
     /**
      * @type {!Array<EnemySkillEffect>}
      */
+    this.name = '';
     this.skills = [];
   }
 
@@ -1221,6 +1218,7 @@ class EnemySkillset {
 
   toJson() {
     return {
+      name: this.name,
       skills: this.skills.map((skill) => skill.toJson()),
     };
   }
@@ -1228,6 +1226,7 @@ class EnemySkillset {
 
 EnemySkillset.fromJson = (json) => {
   const skillset = new EnemySkillset();
+  skillset.name = json.name;
   skillset.skills = json.skills.map((skillJson) => EnemySkill.fromJson(skillJson));
   return skillset;
 }
@@ -1301,7 +1300,7 @@ class EnemyInstance {
     this.resolvePercent = 0;
     this.attributesResisted = [];
     this.typesResisted = [];
-    this.preemptiveSkillset = null; // Used when loading the monster.
+    this.preemptiveSkillset = new EnemySkillset(); // Used when loading the monster.
     this.skillsets = [];
     this.turnCounter = 1; // Not to be used yet.
 
@@ -1319,9 +1318,9 @@ class EnemyInstance {
     this.turnCounterOverride = -1; // Not to be used yet.
 
     // Values that can be set by players.
-    this.ignoreAttributeAbsorb = false;
-    this.ignoreDamageAbsorb = false;
-    this.ignoreDamageVoid = false;
+    // this.ignoreAttributeAbsorb = false;
+    // this.ignoreDamageAbsorb = false;
+    // this.ignoreDamageVoid = false;
     this.ignoreDefensePercent = 0;
     this.poison = 0;
     this.delayed = false; // Not to be used yet.
@@ -1363,35 +1362,38 @@ class EnemyInstance {
       }      
     }
 
-    // Innate Resists (e.g. attribute + type)
-    // TODO: type.
-    if (this.attributesResisted.includes(ping.attribute)) {
-      currentDamage *= 0.5;
-    }
-    currentDamage = Math.ceil(currentDamage);
-
-    // Shield
     if (ping.attribute != -1) {
+      // Innate Resists (e.g. attribute and type)
+      if (this.attributesResisted.includes(ping.attribute)) {
+        currentDamage *= 0.5;
+        currentDamage = Math.ceil(currentDamage);
+      }
+      if (this.typesResisted.some((type) => ping.source.getCard().types.includes(type))) {
+        currentDamage *= 0.5;
+        currentDamage = Math.ceil(currentDamage);
+      }
+
+      // Shield
       currentDamage = currentDamage * (100 - this.shieldPercent) / 100
       currentDamage = Math.ceil(currentDamage);
-    }
 
-    // Defense + Guard Break, Damage afterward is minimum 1.
-    if ((ping.source.countAwakening(IdcAwakening.GUARD_BREAK) == 0 ||
-            (new Set(pings.map((ping) => ping.attribute))).size < 5) &&
-        ping.attribute != -1) {
-      const defense = this.defense * (100 - this.ignoreDefensePercent) / 100;
-      currentDamage -= defense;
-      currentDamage = Math.ceil(currentDamage);
+      // Defense + Guard Break, Damage afterward is minimum 1.
+      if ((ping.source.countAwakening(IdcAwakening.GUARD_BREAK) == 0 ||
+              (new Set(pings.map((ping) => ping.attribute))).size < 5)) {
+        const defense = this.defense * (100 - this.ignoreDefensePercent) / 100;
+        currentDamage -= defense;
+        currentDamage = Math.ceil(currentDamage);
 
-      currentDamage = Math.max(currentDamage, 1);
+        currentDamage = Math.max(currentDamage, 1);
+      }
     }
 
     // Void
     if (this.damageVoid > 0
         && currentDamage > this.damageVoid
         && !this.ignoreDamageVoid
-        && comboContainer.combos[COLORS[ping.attribute]].every((combo) => combo.shape != Shape.BOX)) {
+        && (!(COLORS[ping.attribute] in comboContainer.combos) ||
+            comboContainer.combos[COLORS[ping.attribute]].every((combo) => combo.shape != Shape.BOX))) {
       currentDamage = 0;
     }
 
@@ -1475,7 +1477,7 @@ EnemyInstance.fromJson = (json) =>{
   instance.attributesResisted = json.attributesResisted.map((a) => Number(a));
   instance.typesResisted = json.typesResisted.map((a) => Number(a));
   instance.preemptiveSkillset = json.preemptiveSkillset ?
-      EnemySkillset.fromJson(json.preemptiveSkillset) : null;
+      EnemySkillset.fromJson(json.preemptiveSkillset) : new EnemySkillset();
   instance.skillsets = json.skillsets.map(
       (skillsetJson) => EnemySkillset.fromJson(skillsetJson));
   instance.turnCounter = json.turnCount;
@@ -1725,57 +1727,84 @@ class DungeonInstance {
     return enemySelection;
   }
 
-  createEditorElement() {
-    const dungeonContainer = document.createElement('div');
-    dungeonContainer.id = 'idc-dungeon-editor';
-    dungeonContainer.style.padding = '5px';
-    const titleSetter = document.createElement('input');
-    titleSetter.id = 'idc-dungeon-editor-title'
-    titleSetter.width = '100%';
-    titleSetter.onkeyup = () => {
-      this.title = titleSetter.value;
-    };
-    dungeonContainer.appendChild(titleSetter);
+  createSkillsetEditor(i) {
+    const el = document.createElement('div');
 
-    const floorAdder = document.createElement('div');
-    floorAdder.id = 'idc-dungeon-editor-addfloor';
-    floorAdder.innerText = 'Add Floor';
-    floorAdder.onclick = () => {
-      this.addFloor();
-    };
-    floorAdder.onmouseover = () => {
-      floorAdder.style.border = BORDER_COLOR;
-    };
-    floorAdder.onmouseleave = () => {
-      floorAdder.style.border = '';
-    };
-    dungeonContainer.appendChild(floorAdder);
+    let skillset;
+    if (i == -1) {
+      skillset = this.getActiveEnemy().preemptiveSkillset;
+      el.className = 'idc-enemy-skill-preemptive';
+    } else {
+      skillset = this.getActiveEnemy().skillsets[i];
+    }
 
-    const floorsEditor = document.createElement('table');
-    floorsEditor.id = 'idc-dungeon-editor-floors'
-    floorsEditor.style.fontSize = 'small';
-    for (let i = 0; i < this.floors.length; i++) {
-      const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
-      floorEditor.onclick = () => {
-        this.getActiveEnemy().reset();
-        this.activeFloor = i;
-        this.getActiveEnemy().reset();
+    const skillsetNameEditor = document.createElement('input');
+    skillsetNameEditor.value = skillset.name;
+    skillsetNameEditor.onchange = () => {
+      skillset.name = skillsetNameEditor.value;
+      this.reloadBattleElement();
+    };
+    const addSkill = document.createElement('span');
+    addSkill.innerText = '+';
+    addSkill.onclick = () => {
+      skillset.skills.push(new EnemySkill());
+      this.reloadEditorElement();
+    }
+    const removeSkill = document.createElement('span');
+    if (i != -1) {
+      removeSkill.innerText = '-';
+      removeSkill.onclick = () => {
+        skillset.skills.splice(i, 1);
         this.reloadEditorElement();
+      }
+    }
+    const skillsetTable = document.createElement('table');
+    for (let j = 0; j < skillset.skills.length; j++) {
+      const row = document.createElement('tr');
+      const skillTypeCell = document.createElement('td');
+      const skillTypeSelect = document.createElement('select');
+      skillTypeSelect.style.fontSize = 'small';
+      for (const skillEffectType of Object.values(EnemySkillEffect)) {
+        const skillOption = document.createElement('option');
+        skillOption.innerText = skillEffectType;
+        skillOption.value = skillEffectType;
+        skillTypeSelect.appendChild(skillOption);
+      }
+      skillTypeSelect.onchange = () => {
+        skillset.skills[j].effect = skillTypeSelect.value;
         this.reloadBattleElement();
       }
-      const floorDelete = floorEditor.getElementsByClassName('idc-dungeon-floor-delete')[0];
-      floorDelete.onclick = () => {
-        this.deleteFloor(i, idc);
+      skillTypeSelect.value = skillset.skills[j].effect;
+      skillTypeCell.appendChild(skillTypeSelect);
+      row.appendChild(skillTypeCell)
+
+      const skillConfigCell = document.createElement('td');
+      const skillConfigInput = document.createElement('input');
+      skillConfigInput.type = 'number';
+      skillConfigInput.onchange = () => {
+        skillset.skills[j].config = Number(skillConfigInput.value);
+        this.reloadBattleElement();
       }
+      skillConfigInput.style.fontSize = 'small';
+      skillConfigInput.value = skillset.skills[j].config;
+      skillConfigCell.appendChild(skillConfigInput);
+      row.appendChild(skillConfigCell);
 
-      floorsEditor.appendChild(floorEditor);
+      skillsetTable.appendChild(row);
     }
-    dungeonContainer.appendChild(floorsEditor);
 
+    el.appendChild(skillsetNameEditor);
+    el.appendChild(addSkill);
+    el.appendChild(skillsetTable);
+    return el;
+  }
+
+  createEnemyEditor() {
     const enemyEditor = document.createElement('div');
     enemyEditor.appendChild(this.createEnemySelector());
 
     const enemyStatEditTable = document.createElement('table');
+    enemyStatEditTable.style.fontSize = 'small';
     const hpRow = document.createElement('tr');
     const hpLabel = document.createElement('td');
     hpLabel.innerText = 'Max HP';
@@ -1871,18 +1900,111 @@ class DungeonInstance {
       cellDown.innerText = COLORS[i].toUpperCase();
       resistAttributesLabelValues.appendChild(cellDown);
     }
+
+    const resistTypesRow = document.createElement('tr');
+    const resistTypesLabel = document.createElement('td');
+    resistTypesLabel.innerText = 'Resist Type';
+    resistTypesRow.appendChild(resistTypesLabel);
+    const resistTypesCell = document.createElement('td');
+    const resistType1Select = document.createElement('select');
+    resistType1Select.id = 'idc-enemy-resist-type-1';
+    const resistType2Select = document.createElement('select');
+    resistType2Select.id = 'idc-enemy-resist-type-2';
+    resistType1Select.onchange = () => {
+      const resists = [Number(resistType1Select.value), Number(resistType2Select.value)];
+      this.getActiveEnemy().typesResisted = resists.filter((value) => value > -1);
+      this.reloadBattleElement();
+    }
+    for (const type of [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 14, 15]) {
+      const typeOption1 = document.createElement('option');
+      typeOption1.value = type;
+      typeOption1.innerText = TypeToName[type];
+      resistType1Select.appendChild(typeOption1);
+      const typeOption2 = document.createElement('option');
+      typeOption2.value = type;
+      typeOption2.innerText = TypeToName[type];
+      resistType2Select.appendChild(typeOption2);
+    }
+    resistTypesCell.appendChild(resistType1Select);
+    resistTypesCell.appendChild(resistType2Select);
+    resistTypesRow.appendChild(resistTypesCell);
+
     resistAttributeEditor.appendChild(resistAttributesActualValues);
     resistAttributeEditor.appendChild(resistAttributesLabelValues);
-    // resistAttributeValue.appendChild(resistAttributeRow);
     resistAttributeValue.appendChild(resistAttributeEditor);
     resistAttributeRow.appendChild(resistAttributeValue);
     enemyStatEditTable.appendChild(resistAttributeRow);
-    // this.typesResisted = [];
+    enemyStatEditTable.appendChild(resistTypesRow);
     // this.preemptiveSkillset = null; // Used when loading the monster.
     // this.skillsets = [];
     // this.turnCounter = 1; // Not to be used yet.
     enemyEditor.appendChild(enemyStatEditTable);
-    dungeonContainer.appendChild(enemyEditor);
+
+    enemyEditor.appendChild(this.createSkillsetEditor(-1));
+
+    const addSkillset = document.createElement('div');
+    addSkillset.style.fontSize = 'normal';
+    addSkillset.innerText = 'Add Skillset';
+    addSkillset.onclick = () => {
+      this.getActiveEnemy().skillsets.push(new EnemySkillset());
+      this.reloadEditorElement();
+    }
+    enemyEditor.appendChild(addSkillset);
+    const skillEditorEl = document.createElement('div');
+    skillEditorEl.id = 'idc-enemy-skills';
+    enemyEditor.appendChild(skillEditorEl);
+
+    return enemyEditor
+  }
+
+  createEditorElement() {
+    const dungeonContainer = document.createElement('div');
+    dungeonContainer.id = 'idc-dungeon-editor';
+    dungeonContainer.style.padding = '5px';
+    const titleSetter = document.createElement('input');
+    titleSetter.id = 'idc-dungeon-editor-title'
+    titleSetter.width = '100%';
+    titleSetter.onkeyup = () => {
+      this.title = titleSetter.value;
+    };
+    dungeonContainer.appendChild(titleSetter);
+
+    const floorAdder = document.createElement('div');
+    floorAdder.id = 'idc-dungeon-editor-addfloor';
+    floorAdder.innerText = 'Add Floor';
+    floorAdder.onclick = () => {
+      this.addFloor();
+    };
+    floorAdder.onmouseover = () => {
+      floorAdder.style.border = BORDER_COLOR;
+    };
+    floorAdder.onmouseleave = () => {
+      floorAdder.style.border = '';
+    };
+    dungeonContainer.appendChild(floorAdder);
+
+    const floorsEditor = document.createElement('table');
+    floorsEditor.id = 'idc-dungeon-editor-floors'
+    floorsEditor.style.fontSize = 'small';
+    for (let i = 0; i < this.floors.length; i++) {
+      const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
+      floorEditor.onclick = () => {
+        this.getActiveEnemy().reset();
+        this.activeFloor = i;
+        this.getActiveEnemy().reset();
+        this.reloadEditorElement();
+        this.reloadBattleElement();
+      }
+      const floorDelete = floorEditor.getElementsByClassName('idc-dungeon-floor-delete')[0];
+      floorDelete.onclick = () => {
+        this.deleteFloor(i, idc);
+      }
+
+      floorsEditor.appendChild(floorEditor);
+    }
+    dungeonContainer.appendChild(floorsEditor);
+
+    dungeonContainer.appendChild(this.createEnemyEditor());
 
     return dungeonContainer;
   }
@@ -1897,7 +2019,9 @@ class DungeonInstance {
     for (let i = 0; i < this.floors.length; i++) {
       const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
       floorEditor.onclick = () => {
+        this.getActiveEnemy().reset();
         this.activeFloor = i;
+        this.getActiveEnemy().reset();
         this.reloadEditorElement();
         this.reloadBattleElement();
       }
@@ -1916,6 +2040,20 @@ class DungeonInstance {
     document.getElementById('idc-enemy-resolve').value = enemy.resolvePercent;
     for (const el of document.getElementsByClassName('idc-enemy-resist-attributes')) {
       el.checked = enemy.attributesResisted.includes(Number(el.value));
+    }
+    document.getElementById('idc-enemy-resist-type-1').value = enemy.typesResisted.length ? enemy.typesResisted[0] : -1;
+    document.getElementById('idc-enemy-resist-type-2').value = enemy.typesResisted.length > 1 ? enemy.typesResisted[1] : -1;
+
+    const preemptiveEl = document.getElementsByClassName('idc-enemy-skill-preemptive')[0];
+    preemptiveEl.parentElement.insertBefore(this.createSkillsetEditor(-1), preemptiveEl);
+    preemptiveEl.parentElement.removeChild(preemptiveEl);
+
+    const skillsetEl = document.getElementById('idc-enemy-skills');
+    while (skillsetEl.firstChild) {
+      skillsetEl.removeChild(skillsetEl.firstChild);
+    }
+    for (let i = 0; i < enemy.skillsets.length; i++) {
+      skillsetEl.appendChild(this.createSkillsetEditor(i));
     }
   }
 
@@ -2465,9 +2603,18 @@ class DungeonInstance {
     }
     actionSelect.value = this.idc.action;
 
+    const activeTeam = this.idc.getActiveTeam();
+
     // Reload Damage Table.
     const {pings, bonusAttacks, healing, trueBonusAttack} = this.idc.getDamagePre();
-    const activeTeam = this.idc.getActiveTeam();
+    const bonusAttack = new DamagePing();
+    bonusAttack.amount = trueBonusAttack;
+    bonusAttack.attribute = -1;
+    bonusAttack.isActive = true;
+    bonusAttack.isSub = true;
+    bonusAttack.source = activeTeam[5];
+    pings.push(bonusAttack);
+
     let currentHp = enemy.currentHp;
     // TODO: Figure out this precisely.
     const resolveActive = enemy.resolvePercent > 0 && (100 * enemy.currentHp / enemy.maxHp) > enemy.resolvePercent;
@@ -2483,6 +2630,12 @@ class DungeonInstance {
       ping.actualDamage = currentHp - next;
       currentHp = next;
     }
+
+    if (bonusAttack.resolveTriggered) {
+      bonusAttack.actualDamage++;
+      currentHp = 0;
+    }
+
 
     for (let i = 0; i < 6; i++) {
       const mainColor = FontColors[activeTeam[i].getAttribute()];
@@ -2516,34 +2669,25 @@ class DungeonInstance {
       effectiveDamageSub.style.color = FontColors[5];
 
       for (const ping of pings.filter((ping) => ping.source == activeTeam[i])) {
-        if (ping.isSub) {
-          preDamageSub.style.color = FontColors[ping.attribute];
-          postDamageSub.style.color = FontColors[ping.attribute];
-          effectiveDamageSub.style.color = FontColors[ping.attribute];
-          preDamageSub.innerText = numberWithCommas(ping.amount);
-          postDamageSub.innerText = numberWithCommas(ping.rawDamage);
-          if (ping.actualDamage != ping.rawDamage) {
-            if (currentHp == 0) {
+        const preDamage = ping.isSub ? preDamageSub : preDamageMain;
+        const postDamage = ping.isSub ? postDamageSub : postDamageMain;
+        const effectiveDamage = ping.isSub ? effectiveDamageSub : effectiveDamageMain;
 
-            }
-            effectiveDamageSub.innerText = ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage);
+        preDamage.style.color = FontColors[ping.attribute];
+        postDamage.style.color = FontColors[ping.attribute];
+        effectiveDamage.style.color = FontColors[ping.attribute];
+
+        if (preDamage.innerText) {
+          preDamage.innerText += ' ' + numberWithCommas(ping.amount);
+          postDamage.innerText += ' ' + numberWithCommas(ping.rawDamage);
+          if (ping.actualDamage != ping.rawDamage) {
+            effectiveDamage.innerText += ' ' + (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
           }
         } else {
-          preDamageMain.style.color = FontColors[ping.attribute];
-          postDamageMain.style.color = FontColors[ping.attribute];
-          effectiveDamageMain.style.color = FontColors[ping.attribute];
-          if (preDamageMain.innerText) {
-            preDamageMain.innerText += ' ' + numberWithCommas(ping.amount);
-            postDamageMain.innerText += ' ' + numberWithCommas(ping.rawDamage);
-            if (ping.actualDamage != ping.rawDamage) {
-              effectiveDamageMain.innerText += ' ' + (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
-            }
-          } else {
-            preDamageMain.innerText = numberWithCommas(ping.amount);
-            postDamageMain.innerText = numberWithCommas(ping.rawDamage);
-            if (ping.actualDamage != ping.rawDamage) {
-              effectiveDamageMain.innerText += ' ' + (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
-            }
+          preDamage.innerText = numberWithCommas(ping.amount);
+          postDamage.innerText = numberWithCommas(ping.rawDamage);
+          if (ping.actualDamage != ping.rawDamage) {
+            effectiveDamage.innerText += ' ' + (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
           }
         }
       }

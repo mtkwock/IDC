@@ -58,6 +58,7 @@ const TypeToName = {
   14: 'Enhanced',
   15: 'Redeemable',
 };
+TypeToName[-1] = 'None';
 
 // 11x 1-slot Latents
 // 22 2-slot
