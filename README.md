@@ -61,7 +61,7 @@ By clicking `Save Team Screenshot`, you download a screenshot a part of the scre
 
 ### View Monster Stats
 
-##Command Editor syntax
+## Command Editor syntax
 
 ### Start with:
 
