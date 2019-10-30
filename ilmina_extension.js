@@ -1,43 +1,4 @@
-/**
- * Written by Scarlet#1115 on Discord.
- * Please do not redistribute yet... This is stil in Alpha.
- *
- * NOTE: Only do this if you trust the creator of this file.
- *   Doing this in general can be dangrous if you don't trust
- *   the source of the code.
- *
- * To install this extension...
- * 1) Download/clone folder from https://github.com/mtkwock/IDC
- * 2) In Chrome, open chrome://extensions, ensure Developer Mode is on (top right toggle).
- * 3) In the top left, click "Load unpacked"
- * 4) Navigate to the (uncompressed) folder of the download from GitHub
- * 5) Click "Select" when in the folder.
- * 6) Navigate to https://ilmina.com/#/ShowMeTheRopes
- * 7) This should begin the app.
-
- * To update
- * 1) git pull
- * 2) In chrome://extensions, click the Refresh button in the installed app.
- * 3) The next time you load this page, you should get this.
- *
- * To use
- * Change Monster:
- * 1) Click on the monster you wish to change on the team.
- * 2) On the left pane in the Monster field, change the ID to the monster you want.
- * 3) The left pane will control all aspects of the monster.
- *    I hope these are self-explanatory.  If not, please let me know.
- * View Monster Stats
- * 1) Click the [DEBUG] button above the monster editing pane.
- *    This will print the monster's stats in solo and multiplay in the console.
- *    NOTE: If you find an inconsistency with the game, please let me know.
- *          I want to make sure my rounding and calculations are correct.
- */
-
-// alert('I\'ll show you the ropes!');
-console.log('Ropes being shown');
-
 {
-
 const AWAKENING_SCALE = 0.7;
 const MONSTER_AWAKENING_SCALE = 0.43;
 const AWAKENING_NUMBERS = '0123456789';
@@ -1729,6 +1690,7 @@ class DungeonInstance {
 
   createSkillsetEditor(i) {
     const el = document.createElement('div');
+    el.style.marginTop = '5px';
 
     let skillset;
     if (i == -1) {
@@ -1774,6 +1736,7 @@ class DungeonInstance {
 
       const skillTypeCell = document.createElement('td');
       const skillTypeSelect = document.createElement('select');
+
       skillTypeSelect.style.fontSize = 'small';
       for (const skillEffectType of Object.values(EnemySkillEffect)) {
         const skillOption = document.createElement('option');
@@ -1781,24 +1744,44 @@ class DungeonInstance {
         skillOption.value = skillEffectType;
         skillTypeSelect.appendChild(skillOption);
       }
+      skillTypeSelect.value = skillset.skills[j].effect;
       skillTypeSelect.onchange = () => {
         skillset.skills[j].effect = skillTypeSelect.value;
         this.reloadBattleElement();
+        this.reloadEditorElement();
       }
-      skillTypeSelect.value = skillset.skills[j].effect;
       skillTypeCell.appendChild(skillTypeSelect);
       row.appendChild(skillTypeCell)
 
       const skillConfigCell = document.createElement('td');
-      const skillConfigInput = document.createElement('input');
-      skillConfigInput.type = 'number';
-      skillConfigInput.onchange = () => {
-        skillset.skills[j].config = Number(skillConfigInput.value);
-        this.reloadBattleElement();
+      switch(skillset.skills[j].effect) {
+        case EnemySkillEffect.NONE:
+        case EnemySkillEffect.STATUS_SHIELD:
+          break;
+        case EnemySkillEffect.ATTRIBUTE_ABSORB:
+          const absorbed = idxsFromBits(Number(skillset.skills[j].config));
+          for (let attr = 0; attr < 5; attr++) {
+            const configEl = document.createElement('span');
+            configEl.innerText = COLORS[attr].toUpperCase();
+            configEl.style.border = absorbed.includes(attr) ? BORDER_COLOR : '';
+            configEl.onclick = () => {
+              skillset.skills[j].config ^= 1 << attr;
+              this.reloadEditorElement();
+            };
+            skillConfigCell.appendChild(configEl);
+          }
+          break;
+        default:
+          const skillConfigInput = document.createElement('input');
+          skillConfigInput.type = 'number';
+          skillConfigInput.onchange = () => {
+            skillset.skills[j].config = Number(skillConfigInput.value);
+            this.reloadBattleElement();
+        }
+        skillConfigInput.style.fontSize = 'small';
+        skillConfigInput.value = skillset.skills[j].config;
+        skillConfigCell.appendChild(skillConfigInput);
       }
-      skillConfigInput.style.fontSize = 'small';
-      skillConfigInput.value = skillset.skills[j].config;
-      skillConfigCell.appendChild(skillConfigInput);
       row.appendChild(skillConfigCell);
 
       skillsetTable.appendChild(row);
@@ -1956,6 +1939,7 @@ class DungeonInstance {
     preemptiveLabel.style.marginTop = '5px';
     preemptiveLabel.style.fontSize = 'medium';
     preemptiveLabel.innerText = 'Preemptive';
+    preemptiveLabel.title = 'Skills activated upon loading this monster.';
     enemyEditor.appendChild(preemptiveLabel);
     enemyEditor.appendChild(this.createSkillsetEditor(-1));
 
@@ -5378,6 +5362,6 @@ window.onhashchange = () => {
   oldHashChange();
   initIdc();
 }
-initIdc();
 
+initIdc();
 }
