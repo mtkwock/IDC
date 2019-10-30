@@ -1461,13 +1461,19 @@ class EnemyInstance {
   }
 
   toJson() {
-    const obj = {
-      maxHp: this.maxHp,
-    };
+    const obj = {};
+    let card = {unknownData: []};
     if (this.id in vm.model.cards) {
       obj.id = this.id;
+      card = vm.model.cards[this.id];
     }
-    if (this.defense) {
+    if (this.maxHp > 1 && this.maxHp != card.unknownData[7]) {
+      obj.maxHp = this.maxHp;
+    }
+    if (this.attack > 1 && this.attack != card.unknownData[10]) {
+      obj.attack = this.attack;
+    }
+    if (this.defense && this.defense != card.unknownData[13]) {
       obj.defense = this.defense;
     }
     if (this.resolvePercent > 0) {
@@ -1498,8 +1504,16 @@ class EnemyInstance {
 EnemyInstance.fromJson = (json) =>{
   const instance = new EnemyInstance();
   instance.id = Number(json.id) || -1;
-  instance.maxHp = Number(json.maxHp) || 1;
-  instance.defense = Number(json.defense) || 0;
+  if (instance.id in vm.model.cards) {
+    const card = vm.model.cards[instance.id];
+    instance.maxHp = Number(json.maxHp) || card.unknownData[7];
+    instance.attack = Number(json.attack) || card.unknownData[10];
+    instance.defense = Number(json.defense) || card.unknownData[13];
+  } else {
+    instance.maxHp = Number(json.maxHp) || 1;
+    instance.attack = Number(json.attack) || 1;
+    instance.defense = Number(json.defense) || 0;
+  }
   instance.resolvePercent = Number(json.resolvePercent) || 0;
   instance.attributesResisted = (json.attributesResisted || []).map((a) => Number(a));
   instance.typesResisted = (json.typesResisted || []).map((a) => Number(a));
@@ -3923,7 +3937,9 @@ class Idc {
       burst: {
         attrRestrictions: [],
         typeRestrictions: [],
+        awakenings: [],
         multiplier: 1,
+        awakeningScale: 0, // How much to increase multiplier by for each matched awakening.
       },
       ignoreDamageAbsorb: false,
       ignoreAttributeAbsorb: false,

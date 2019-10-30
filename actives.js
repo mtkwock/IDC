@@ -24,7 +24,7 @@ const baseActiveSkill = Object.freeze({
   },
   // Scales based on awakenings, monster attribute, or monster type.
   // multiplayer impacts awakenings.
-  burst: (monster, team, awakeningsActive, isMultiplayer) => null,
+  burst: null,
   // Immediate heals.  Can be flat, monster scaling, or team HP scaling.
   heal: (monster, idc) => {
     return 0;
@@ -72,9 +72,7 @@ function combineActiveSkills(as1, as2) {
     damage: (...args) => {
       return as1.damage(...args).concat(as2.damage(...args));
     },
-    burst: (...args) => {
-      return as1.burst(...args) * as2.burst(...args);
-    },
+    burst: as1.burst || as2.burst,
     heal: (...args) => {
       return as1.heal(...args) + as2.heal(...args);
     },
@@ -290,12 +288,10 @@ function attrOrRcvBurst(params) {
     active.rcvBurst = mult100;
     active.description = `${mult100 / 100}x RCV Burst for ${turnCount} turn(s).`;
   } else {
-    active.burst = (monster) => {
-      if (monster.getAttribute() == attr || monster.getSubattribute() == attr) {
-        return mult100 / 100;
-      }
-      return 1;
-    }
+    active.burst = {
+      attributeRestrictions: [attr],
+      multiplier: mult100 / 100,
+    };
     active.description = `${mult100 / 100}x ${AttributeToName[attr]} Burst for ${turnCount} turn(s).`;
   }
   return active;
@@ -307,6 +303,21 @@ function massAttack(params) {
   return createActiveSkill({
     description: `Mass attack for ${turns} turns.`,
     massAttack: true,
+  });
+}
+
+// 52
+function enhanceOrbs(params) {
+  // Based on Ilmina, potency is never changed.  This is almost always 6.
+  const [attr, unusedPotency] = params;
+
+  return createActiveSkill({
+    description: `Enhance ${AttributeToName[attr]} orbs.`,
+    enhance: (comboContainer) => {
+      for (const combo of comboContainer.combos[COLORS[attr]]) {
+        combo.enhanced = combo.count;
+      }
+    },
   });
 }
 
@@ -360,21 +371,6 @@ function scalingAttackRandomToOneEnemy(params) {
   const as = scalingAttackRandomToAllEnemies(params);
   as.description = as.description.replace('Mass', 'Single Target');
   return as;
-}
-
-// 62
-function enhanceOrbs(params) {
-  // Based on Ilmina, potency is never changed.  This is almost always 6.
-  const [attr, unusedPotency] = params;
-
-  return createActiveSkill({
-    description: `Enhance ${AttributeToName[attr]} orbs.`,
-    enhance: (comboContainer) => {
-      for (const combo of comboContainer.combos[COLORS[attr]]) {
-        combo.enhanced = combo.count;
-      }
-    },
-  });
 }
 
 // 71
@@ -451,11 +447,9 @@ function burstForOneType(params) {
 
   return createActiveSkill({
     description: `${mult100 / 100}x Burst for ${TypeToName[type]} for ${turn} turn(s).`,
-    burst: (monster) => {
-      if (monster.getCard().types.includes(type)) {
-        return mult100 / 100;
-      }
-      return 1;
+    burst: {
+      typeRestrictions: [type],
+      multiplier: mult/100,
     },
   });
 }
@@ -463,15 +457,12 @@ function burstForOneType(params) {
 // 90
 function burstForTwoAttributes(params) {
   const [turnCount, attr1, attr2, atk100] = params;
-  const attrs = new Set([attr1, attr2]);
 
   return createActiveSkill({
     description: `${mult100 / 100}x Burst for ${AttributeToName[attr1]} and ${attr2} for ${turnCount} turn(s).`,
-    burst: (monster) => {
-      if (attrs.has(monster.getAttribute()) || attrs.has(monster.getSubattribute())) {
-        return atk100 / 100;
-      }
-      return 1;
+    burst: {
+      attributeRestrictions: [attr1, attr2],
+      multiplier: atk100 / 100,
     },
   });
 }
@@ -482,11 +473,9 @@ function burstForTwoTypes(params) {
 
   return createActiveSkill({
     description: `${mult100 / 100}x Burst for ${TypeToName[type1]} and ${TypeToName[type2]} for ${turnCount} turn(s).`,
-    burst: (monster, team, awakeningsActive, isMultiplayer) => {
-      if (monster.getCard().types.includes(type1) || monster.getCard().types.includes(type2)) {
-        return atk100 / 100;
-      }
-      return 1;
+    burst: {
+      typeRestrictions: [type1, type2],
+      multiplier: atk100 / 100,
     },
   })
 }
@@ -610,11 +599,9 @@ function effectFromAwakeningCount(params) {
     };
   } else if (effectFlag == 2) {
     active.description = `${mult100 / 100}x Burst per ${awakenings.map((awk) => AwakeningToName[awk])} Awakening.`;
-    active.burst = (monster, team, awakeningsActive, isMultiplayer) => {
-      if (!awakeningsActive) {
-        return 1;
-      }
-      return 1 + countAwakenings(team, isMultiplayer) * mult100 / 100;
+    active.burst = {
+      awakenings: [awakenings],
+      awakeningScale: mult100 / 100,
     };
   } else if (effectFlag == 3) {
     active.description = `${mult100}% Shield per ${awakenings.map((awk) => AwakeningToName[awk])} Awakening.`;
@@ -683,19 +670,21 @@ const ACTIVE_SKILL_GENERATORS = {
   8: flatHeal,
   // 9: orbChange,
   // 10: orbRefresh,
-  19: defenseBreak,
   18: delay,
+  19: defenseBreak,
+  // 20: orbChangeDouble,
+  // 21: attrDamageShield,
   35: scalingAttackAndHeal,
   37: scalingAttackToOneEnemy,
   42: flatAttackToAttribute,
   50: attrOrRcvBurst,
   51: massAttack,
+  52: enhanceOrbs,
   55: fixedDamageToOneEnemy,
   56: fixedDamageToAllEnemies,
   58: scalingAttackRandomToOneEnemy,
   59: scalingAttackRandomToOneEnemy,
   // 60: counterAttack
-  62: enhanceOrbs,
   71: fullBoard,
   84: scalingAttackAndSuicideSingle,
   85: scalingAttackAndSuicideMass,
@@ -703,6 +692,7 @@ const ACTIVE_SKILL_GENERATORS = {
   87: flatAttackAndSuicideMass,
   88: burstForOneType,
   90: burstForTwoAttributes,
+  // 91: orbEnhanceTwo,
   92: burstForTwoTypes,
   // 93: leaderSwap,
   110: grudgeStrike,
@@ -714,23 +704,31 @@ const ACTIVE_SKILL_GENERATORS = {
   // 127: orbChangeColumn,
   // 128: orbChangeRow,
   // 132: timeExtend,
+  138: multipleActiveSkills,
   // 140: enhanceOrbsMany,
   // 141: randomOrbSpawn,
   // 142: selfAttributeChange,
-  138: multipleActiveSkills,
   // 143: scalingAttackFromTeamHp, // This doesn't exist in NA.
   144: scalingAttackFromTeam,
   // 145: scalingRecoveryFromTeam,
   146: haste,
   // 152: lockOrbs,
   // 153: enemyAttributeChange,
+  // 154: multiOrbChange,
   156: effectFromAwakeningCount,
   160: addCombos,
   161: trueGravity,
-  // 172: unlock,
+  // 172: unlockOrbs,
   // 173: voidAbsorb,
+  // 176: orbSpawnPattern,
+  // 179: healOverTime,
+  // 180: increasedEnhancedOrbChance,
+  // 184: noSkyfallActive,
   188: fixedDamageToOneEnemy, // This is the same as 55? Perhaps this runs faster?
+  // 189: cheaterActiveLol, // Lkali + path trace.
+  // 191: voidDamageVoid,
   195: pureSuicide,
+  // 196: reduceUnmatchable,
 };
 
 function getActiveSkillEffects(activeSkillId) {
