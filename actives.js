@@ -387,22 +387,25 @@ function fullBoard(params) {
 
 // 84
 function scalingAttackAndSuicideSingle(params) {
-  const [attr, scaleBase, scaleMax, suicideTo] = params;
+  let [attr, scaleBase100, scaleMax100, suicideTo] = params;
+  if (!suicideTo) {
+    suicideTo = 0;
+  }
 
   return createActiveSkill({
-    description: `Single Target ${scaleBase / 100}-${scaleMax / 100}x ${AttributeToName[attr]} Attack. Suicide to ${suicideTo}%.`,
+    description: `Single Target ${scaleBase100 / 100}-${scaleMax100 / 100}x ${AttributeToName[attr]} Attack. Suicide to ${suicideTo}%.`,
     suicideTo: suicideTo || 0,
     damage: (source, team, awakeningsActive, isMultiplayer) => {
       const ping = new DamagePing();
       ping.source = source;
       ping.attribute = attr;
       ping.isActive = true;
-      let scale = scaleBase;
-      if (scaleBase != scaleMax) {
-        scale = Math.ceil(Math.random() * (scaleMax - scaleBase)) + scaleBase;
+      let scale100 = scaleBase100;
+      if (scaleBase100 != scaleMax100) {
+        scale100 = Math.ceil(Math.random() * (scaleMax100 - scaleBase100)) + scaleBase100;
       }
       ping.amount = source.getAtk(isMultiplayer, awakeningsActive);
-      ping.multiply(scale);
+      ping.multiply(scale100 / 100, Round.UP);
       return [ping];
     },
   });
