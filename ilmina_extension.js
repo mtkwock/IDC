@@ -2243,6 +2243,7 @@ class DungeonInstance {
       const idCell = document.createElement('td');
       idCell.id = `idc-battle-damage-id-${i}`;
       idCell.innerText = '-';
+      idCell.style.height = '32px';
       damageRow.appendChild(idCell);
       const bindCell = document.createElement('td');
       const bindCheckbox = document.createElement('input');
@@ -2493,23 +2494,23 @@ class DungeonInstance {
       attrEl.value = String(activeTeam[i].attribute);
 
       const preDamageMain = document.getElementById(`idc-battle-damage-pre-main-${i}`);
-      preDamageMain.innerText = '0';
+      preDamageMain.innerText = '';
       preDamageMain.style.color = FontColors[5];
       const postDamageMain = document.getElementById(`idc-battle-damage-post-main-${i}`);
-      postDamageMain.innerText = '0';
+      postDamageMain.innerText = '';
       postDamageMain.style.color = FontColors[5];
       const effectiveDamageMain = document.getElementById(`idc-battle-damage-effective-main-${i}`);
-      effectiveDamageMain.innerText = ' - ';
+      effectiveDamageMain.innerText = '';
       effectiveDamageMain.style.color = FontColors[5];
 
       const preDamageSub = document.getElementById(`idc-battle-damage-pre-sub-${i}`);
-      preDamageSub.innerText = '0';
+      preDamageSub.innerText = '';
       preDamageSub.style.color = FontColors[5];
       const postDamageSub = document.getElementById(`idc-battle-damage-post-sub-${i}`);
-      postDamageSub.innerText = '0';
+      postDamageSub.innerText = '';
       postDamageSub.style.color = FontColors[5];
       const effectiveDamageSub = document.getElementById(`idc-battle-damage-effective-sub-${i}`);
-      effectiveDamageSub.innerText = ' - ';
+      effectiveDamageSub.innerText = '';
       effectiveDamageSub.style.color = FontColors[5];
 
       for (const ping of pings.filter((ping) => ping.source == activeTeam[i])) {
@@ -2529,10 +2530,18 @@ class DungeonInstance {
           preDamageMain.style.color = FontColors[ping.attribute];
           postDamageMain.style.color = FontColors[ping.attribute];
           effectiveDamageMain.style.color = FontColors[ping.attribute];
-          preDamageMain.innerText = numberWithCommas(ping.amount);
-          postDamageMain.innerText = numberWithCommas(ping.rawDamage);
-          if (ping.actualDamage != ping.rawDamage) {
-            effectiveDamageMain.innerText = ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage);
+          if (preDamageMain.innerText) {
+            preDamageMain.innerText += ' ' + numberWithCommas(ping.amount);
+            postDamageMain.innerText += ' ' + numberWithCommas(ping.rawDamage);
+            if (ping.actualDamage != ping.rawDamage) {
+              effectiveDamageMain.innerText += ' ' + (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
+            }
+          } else {
+            preDamageMain.innerText = numberWithCommas(ping.amount);
+            postDamageMain.innerText = numberWithCommas(ping.rawDamage);
+            if (ping.actualDamage != ping.rawDamage) {
+              effectiveDamageMain.innerText += ' ' + (ping.actualDamage == 0 ? '0' : numberWithCommas(ping.actualDamage));
+            }
           }
         }
       }
