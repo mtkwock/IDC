@@ -1475,6 +1475,7 @@ class DungeonFloor {
     const addMonster = document.createElement('div');
     addMonster.className = 'idc-dungeon-floor-add-enemy';
     addMonster.innerText = '[+]';
+    addMonster.style.cursor = 'pointer';
     addMonster.onmouseover = () => {
       addMonster.style.border = BORDER_COLOR;
     };
@@ -1497,6 +1498,19 @@ class DungeonFloor {
       const enemyRow = document.createElement('tr');
       enemyRow.className = 'idc-dungeon-floor-enemy';
 
+      const deleteCell = document.createElement('td');
+      if (i > 0) {
+        deleteCell.innerText = '[-]';
+        deleteCell.style.cursor = 'pointer';
+        deleteCell.onclick = () => {
+          if (this.activeEnemy >= i) {
+            this.activeEnemy--;
+          }
+          this.enemies.splice(i, 1);
+        }
+      }
+      enemyRow.appendChild(deleteCell);
+
       const enemy = this.enemies[i];
       const enemyEl = document.createElement('td');
       enemyEl.innerText = `${enemy.getName()}`;
@@ -1514,8 +1528,11 @@ class DungeonFloor {
     enemies.appendChild(enemiesTable);
     el.appendChild(enemies);
     const deleteEl = document.createElement('td');
-    deleteEl.className = 'idc-dungeon-floor-delete';
-    deleteEl.innerText = '[X]';
+    if (idx != 0) {
+      deleteEl.className = 'idc-dungeon-floor-delete';
+      deleteEl.innerText = '[-]';
+      deleteEl.style.cursor = 'pointer';
+    }
     el.appendChild(deleteEl);
     return el;
   }
@@ -1643,7 +1660,16 @@ class DungeonInstance {
       option.onclick = () => {
         options.style.display = 'none';
         enemySelector.value = option.value;
-        this.getActiveEnemy().setId(enemySelector.value);
+        const enemy = this.getActiveEnemy();
+        enemy.setId(enemySelector.value);
+        if (option.value in vm.model.cards) {
+          const card = vm.model.cards[option.value];
+          // Hopefully good defaults.  May change!
+          enemy.maxHp = card.unknownData[7];
+          enemy.attack = card.unknownData[10];
+          enemy.defense = card.unknownData[13];
+        }
+        enemy.reset();
         this.reloadEditorElement();
         this.reloadBattleElement();
       }
@@ -1654,8 +1680,17 @@ class DungeonInstance {
       if (e.keyCode == 13) {
         const value = document.getElementById(`idc-enemy-select-option-0`).value;
         console.log(`Changing monster id to ${value}`);
-        this.getActiveEnemy().setId(value);
+        const enemy = this.getActiveEnemy();
+        enemy.setId(value);
+        if (value in vm.model.cards) {
+          const card = vm.model.cards[value];
+          // Hopefully good defaults.  May change!
+          enemy.maxHp = card.unknownData[7];
+          enemy.attack = card.unknownData[10];
+          enemy.defense = card.unknownData[13];
+        }
         options.style.display = 'none';
+        enemy.reset();
         this.reloadEditorElement();
         this.reloadBattleElement();
         return;
@@ -1702,7 +1737,10 @@ class DungeonInstance {
 
     const removeSkillset = document.createElement('div');
     if (i != -1) {
+      removeSkillset.style.display = 'inline-block';
       removeSkillset.innerText = '[-]';
+      removeSkillset.style.fontSize = 'medium';
+      removeSkillset.style.cursor = 'pointer';
       removeSkillset.onclick = () => {
         this.getActiveEnemy().skillsets.splice(i, 1);
         this.reloadEditorElement();
@@ -1718,16 +1756,23 @@ class DungeonInstance {
     };
     const addSkill = document.createElement('span');
     addSkill.innerText = 'Add Skill';
+    addSkill.style.border = BORDER_COLOR;
+    addSkill.style.marginLeft = '10px';
+    addSkill.style.padding = '2px';
+    addSkill.style.cursor = 'pointer';
     addSkill.onclick = () => {
       skillset.skills.push(new EnemySkill());
       this.reloadEditorElement();
     }
     const skillsetTable = document.createElement('table');
+    skillsetTable.style.fontSize = 'small';
+    skillsetTable.style.marginLeft = '5px';
     for (let j = 0; j < skillset.skills.length; j++) {
       const row = document.createElement('tr');
 
       const removeSkillCell = document.createElement('td');
       removeSkillCell.innerText = '[-]';
+      removeSkillCell.style.cursor = 'pointer';
       removeSkillCell.onclick = () => {
         skillset.skills.splice(j, 1);
         this.reloadEditorElement();
@@ -1773,6 +1818,7 @@ class DungeonInstance {
           break;
         default:
           const skillConfigInput = document.createElement('input');
+          skillConfigInput.style.width = '100px';
           skillConfigInput.type = 'number';
           skillConfigInput.onchange = () => {
             skillset.skills[j].config = Number(skillConfigInput.value);
@@ -1787,6 +1833,9 @@ class DungeonInstance {
       skillsetTable.appendChild(row);
     }
 
+    if (i != -1) {
+      el.appendChild(removeSkillset);
+    }
     el.appendChild(skillsetNameEditor);
     el.appendChild(addSkill);
     // el.appendChild(removeSkill);
@@ -1952,6 +2001,9 @@ class DungeonInstance {
     const addSkillset = document.createElement('div');
     addSkillset.style.fontSize = 'normal';
     addSkillset.innerText = 'Add Skillset';
+    addSkillset.style.border = BORDER_COLOR;
+    addSkillset.style.padding = '2px';
+    addSkillset.style.cursor = 'pointer';
     addSkillset.onclick = () => {
       this.getActiveEnemy().skillsets.push(new EnemySkillset());
       this.reloadEditorElement();
@@ -1969,6 +2021,7 @@ class DungeonInstance {
     dungeonContainer.id = 'idc-dungeon-editor';
     dungeonContainer.style.padding = '5px';
     const titleSetter = document.createElement('input');
+    titleSetter.placeholder = 'Dungeon Name';
     titleSetter.id = 'idc-dungeon-editor-title'
     titleSetter.style.width = '100%';
     titleSetter.onkeyup = () => {
@@ -1996,15 +2049,17 @@ class DungeonInstance {
     for (let i = 0; i < this.floors.length; i++) {
       const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
       floorEditor.onclick = () => {
-        this.getActiveEnemy().reset();
+        // this.getActiveEnemy().reset();
         this.activeFloor = i;
         this.getActiveEnemy().reset();
         this.reloadEditorElement();
         this.reloadBattleElement();
       }
       const floorDelete = floorEditor.getElementsByClassName('idc-dungeon-floor-delete')[0];
-      floorDelete.onclick = () => {
-        this.deleteFloor(i, idc);
+      if (floorDelete) {
+        floorDelete.onclick = () => {
+          this.deleteFloor(i, idc);
+        }
       }
 
       floorsEditor.appendChild(floorEditor);
@@ -2026,7 +2081,6 @@ class DungeonInstance {
     for (let i = 0; i < this.floors.length; i++) {
       const floorEditor = this.floors[i].createEditorElement(i, i == this.activeFloor);
       floorEditor.onclick = () => {
-        this.getActiveEnemy().reset();
         this.activeFloor = i;
         this.getActiveEnemy().reset();
         this.reloadEditorElement();
@@ -2034,8 +2088,10 @@ class DungeonInstance {
       }
       floorsEditor.appendChild(floorEditor);
       const floorDelete = floorEditor.getElementsByClassName('idc-dungeon-floor-delete')[0];
-      floorDelete.onclick = () => {
-        this.deleteFloor(i);
+      if (floorDelete) {
+        floorDelete.onclick = () => {
+          this.deleteFloor(i);
+        }
       }
     }
 
