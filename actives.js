@@ -187,7 +187,6 @@ function gravity(params) {
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
       ping.source = source;
-      ping.gravity = true;
       ping.attribute = -1;
       ping.amount = Math.floor(enemy.currentHp * percentGravity / 100);
       ping.isActive = true;
@@ -634,7 +633,6 @@ function trueGravity(params) {
     description: `${percent}% True Gravity.`,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
-      ping.gravity = true;
       ping.source = source;
       ping.attribute = -1;
       ping.isActive = true;

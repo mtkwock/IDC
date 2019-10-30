@@ -1371,7 +1371,7 @@ class EnemyInstance {
     currentDamage = Math.ceil(currentDamage);
 
     // Shield
-    if (!ping.gravity) {
+    if (ping.attribute != -1) {
       currentDamage = currentDamage * (100 - this.shieldPercent) / 100
       currentDamage = Math.ceil(currentDamage);
     }
