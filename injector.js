@@ -25,5 +25,7 @@ screenShotter.onclick = () => {
   }, (response) => {});
 }
 document.body.appendChild(screenShotter);
+loadScript('setup.js');
 loadScript('leaders.js');
+loadScript('actives.js');
 loadScript('ilmina_extension.js');

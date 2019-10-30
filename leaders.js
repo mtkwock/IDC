@@ -65,16 +65,6 @@ function createLeaderSkill(configs) {
   return Object.assign(copyBaseLeader(), configs);
 }
 
-function idxsFromBits(bits) {
-  const idxs = [];
-  for (let idx = 0; bits >> idx; idx++) {
-    if (bits >> idx & 1) {
-      idxs.push(idx);
-    }
-  }
-  return idxs;
-}
-
 function combineLeaderSkills(ls1, ls2) {
   // console.log(ls1);
   // console.log(ls2);
@@ -135,25 +125,13 @@ function combineLeaderSkills(ls1, ls2) {
   }
 }
 
-// 3 is red and blue
-// 1 red
-// 2 blue
-// 4 green
-// 8 light
-// 16 dark
-// 32 heart
-// 64 jammer
-// 128 poison
-// 256 mortal poison
-const COLOR_ORDER = 'rbgldhjpmo';
-
-ATTRIBUTE_FLAG_PAIRS = [
-  [0, 1 << 0],  // Fire
-  [1, 1 << 1],  // Water
-  [2, 1 << 2],  // Wood
-  [3, 1 << 3],  // Light
-  [4, 1 << 4],  // Dark
-];
+// ATTRIBUTE_FLAG_PAIRS = [
+//   [0, 1 << 0],  // Fire
+//   [1, 1 << 1],  // Water
+//   [2, 1 << 2],  // Wood
+//   [3, 1 << 3],  // Light
+//   [4, 1 << 4],  // Dark
+// ];
 
 // 12
 function bonusAttackScale(params) {
@@ -207,7 +185,7 @@ function atkScalingFromMatchedColors(params) {
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       let matchedColors = 0;
       for (const c of attrs) {
-        if (comboContainer.combos[COLOR_ORDER[c]].length > 0) {
+        if (comboContainer.combos[COLORS[c]].length > 0) {
           matchedColors++;
         }
       }
@@ -318,7 +296,7 @@ function atkScalingFromLinkedOrbs(params) {
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       let highest = 0;
       for (const attr of attrs) {
-        for (const combo of comboContainer.combos[COLOR_ORDER[attr]]) {
+        for (const combo of comboContainer.combos[COLORS[attr]]) {
           if (combo.count > highest) {
             highest = combo.count;
           }
@@ -376,7 +354,7 @@ function atkScalingFromMatchedColors(params) {
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       let total = 0;
       for (const attr in maxCounts) {
-        total += Math.min(comboContainer.combos[COLOR_ORDER[attr]].length, maxCounts[attr])
+        total += Math.min(comboContainer.combos[COLORS[attr]].length, maxCounts[attr])
       }
       if (total < minMatch) {
         return 1;
@@ -575,7 +553,7 @@ function atkRcvScalingFromLinkedOrbs(params) {
   function getHighest(comboContainer) {
     let highest = 0;
     for (const attr of attrs) {
-      for (const combo of comboContainer.combos[COLOR_ORDER[attr]]) {
+      for (const combo of comboContainer.combos[COLORS[attr]]) {
         if (combo.count > highest) {
           highest = combo.count;
         }
@@ -640,7 +618,7 @@ function atkAndShieldFromMinColorMatch(params) {
     let matched = 0;
     for (const attr of attrs) {
       let didMatch = false;
-      if (comboContainer.combos[COLOR_ORDER[attr]].length) {
+      if (comboContainer.combos[COLORS[attr]].length) {
         didMatch = true;
       }
       if (didMatch && attr <= 4) {
@@ -672,7 +650,7 @@ function atkScalingAndShieldFromMatchedOrbs(params) {
   for (const attrBit of [attr1bit, attr2bit, attr3bit, attr4bit]) {
     if (attrBit) {
       const attr = idxsFromBits(attrBit)[0];
-      const c = COLOR_ORDER[attr];
+      const c = COLORS[attr];
       if (c in maxCounts) {
         maxCounts[c]++;
       } else {
@@ -752,7 +730,7 @@ function atkShieldFromLinkedOrbs(params) {
 
   const linkedOrbExists = (comboContainer) => {
     return appliedAttributes.some((attrNumber) => {
-        return comboContainer.combos[COLOR_ORDER[attrNumber]].some(
+        return comboContainer.combos[COLORS[attrNumber]].some(
             (combo) => combo.count >= minMatched);
     });
   };
@@ -827,12 +805,15 @@ function atkAndCombosFromLinkedOrbs(params) {
 
   function didActivate(comboContainer) {
     return requiredAttrs.every((attr) => {
-      return comboContainer.combos[COLOR_ORDER[attr]].some((combo) => combo.count >= minLinked);
+      return comboContainer.combos[COLORS[attr]].some((combo) => combo.count >= minLinked);
     });
   }
 
   return createLeaderSkill({
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+      if (!atk100) {
+        return 1;
+      }
       return didActivate(comboContainer) ? atk100 / 100 : 1;
     },
     plusCombo: (team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
@@ -849,7 +830,7 @@ function atkAndCombosFromRainbow(params) {
   function didActivate(monsters, comboContainer) {
     // First find relevant colors that were matched.
     return matchedAttr = attrs.filter((attr) => {
-      return comboContainer[COLOR_ORDER[attr]].length > 0;
+      return comboContainer[COLORS[attr]].length > 0;
     }).filter((attr) => {
       // Then find if the team attacked with those colors.
       return attr > 4 || team.some((monster) => {
@@ -877,7 +858,7 @@ function trueBonusFromLinkedOrbs(params) {
   return createLeaderSkill({
     trueBonusAttack: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
       for (const attr of attrs) {
-        for (const combo of comboContainer.combos[COLOR_ORDER[attr]]) {
+        for (const combo of comboContainer.combos[COLORS[attr]]) {
           if (combo.count > minLinked) {
             return damage;
           }

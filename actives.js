@@ -1,4 +1,6 @@
 const baseActiveSkill = Object.freeze({
+  description: '[Unknown] ',
+  swap: 0, // Index of sub to swap to lead.
   noSkyfall: false,
   massAttack: false,
   defenseBreakPercent: 0,
@@ -22,9 +24,7 @@ const baseActiveSkill = Object.freeze({
   },
   // Scales based on awakenings, monster attribute, or monster type.
   // multiplayer impacts awakenings.
-  burst: (monster, team, awakeningsActive, isMultiplayer) => {
-    return 1;
-  },
+  burst: (monster, team, awakeningsActive, isMultiplayer) => null,
   // Immediate heals.  Can be flat, monster scaling, or team HP scaling.
   heal: (monster, idc) => {
     return 0;
@@ -54,6 +54,7 @@ function createActiveSkill(configs) {
 
 function combineActiveSkills(as1, as2) {
   return {
+    description: Array.isArray(as1.description) ? as1.description.concat(as2.description) : [as1.description, as2.description],
     noSkyfall: as1.noSkyfall || as2.noSkyfall,
     massAttack: as1.massAttack || as2.massAttack,
     defenseBreakPercent: as1.defenseBreakPercent || as2.defenseBreakPercent,
@@ -97,12 +98,14 @@ function scalingAttackToAllEnemies(params) {
   const [attr, atk100] = params;
 
   return createActiveSkill({
+    description: `Mass ${atk100 / 100}x ${AttributeToName[attr]} Attack.`,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
+      ping.source = source;
       ping.attribute = attr;
       ping.amount = source.getAtk(isMultiplayer, awakeningsActive);
       ping.multiply(atk100 / 100, Round.UP)
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       return [ping];
     },
   });
@@ -113,12 +116,13 @@ function flatAttackToAllEnemies(params) {
   const [attr, damage] = params;
 
   return createActiveSkill({
+    description: `Mass ${numberWithCommas(damage)} ${AttributeToName[attr]} Attack.`,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
       ping.source = source;
       ping.attribute = attr;
       ping.amount = damage;
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       return [ping];
     }
   })
@@ -129,13 +133,14 @@ function scalingAttackToSingleEnemy(params) {
   const [atk100base, atk100max] = params;
 
   return createActiveSkill({
+    description: `${atk100base / 100}${atk100max ? '-' +  atk100max / 100: ''}x Self-Attribute Attack.`,
     damage: (source, team, awakeningsActive, isMultiplayer) => {
       const ping = new DamagePing();
       ping.source = source;
       ping.attribute = source.getAttribute();
       ping.amount = source.getAtk(isMultiplayer, awakeningsActive);
       ping.multiply(atk100base, Round.UP);
-      ping.ignoreCombo = true;
+      ping.isActive = true;
 
       if (atk100max != atk100base) {
         console.warn('Unhandled possible scaling in Effect 2');
@@ -152,6 +157,7 @@ function shield(params) {
   const [turnCount, shieldPercent] = params;
 
   return createActiveSkill({
+    description: `${shieldPercent}% Shield.`,
     damageMult: () => {
       return 1 - (shieldPercent / 100);
     },
@@ -177,11 +183,13 @@ function gravity(params) {
   const [percentGravity] = params;
 
   return createActiveSkill({
+    description: `${percentGravity}% Gravity.`,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
+      ping.source = source;
       ping.attribute = -1;
       ping.amount = Math.floor(enemy.currentHp * percentGravity / 100);
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       return [ping];
     },
   });
@@ -192,7 +200,8 @@ function flatHeal(params) {
   const [amount] = params;
 
   return createActiveSkill({
-    heal: () => amount;
+    description: `Flat ${amount} Heal.`,
+    heal: () => amount,
   });
 }
 
@@ -200,6 +209,7 @@ function flatHeal(params) {
 function delay(params) {
   const [turns] = params;
   return createActiveSkill({
+    description: `${turns}-turn Delay.`,
     delay: turns,
   });
 }
@@ -209,6 +219,7 @@ function defenseBreak(params) {
   const [turns, defenseBreakPercent] = params;
 
   return createActiveSkill({
+    description: `${defenseBreakPercent}% Defense Break for ${turns} turn(s).`,
     defenseBreakPercent: defenseBreakPercent,
   });
 }
@@ -218,14 +229,15 @@ function scalingAttackAndHeal(params) {
   const [atk100, drain100] = params;
 
   return createActiveSkill({
-    healFromDamage: drain100 / 100;
+    description: `Deal ${atk100 / 100}x Self-Attribute Attack and heal ${drain100}%.`,
+    healFromDamage: drain100 / 100,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
       ping.source = source;
       ping.attribute = source.getAttribute();
       ping.amount = source.getAtk(isMultiplayer, awakeningsActive);
       ping.multiply(atk100 / 100, Round.UP);
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       return [ping];
     },
   });
@@ -236,13 +248,14 @@ function flatAttackToAttribute(params) {
   const [targetAttr, attackAttr, damage] = params;
 
   return createActiveSkill({
+    description: `${damage} ${AttributeToName[attackAttr]} Damage to ${AttributeToName[targetAttr]} Attribute.`,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       if (enemy.getAttribute() != targetAttr) {
         return [];
       }
       const ping = new DamagePing();
       ping.source = source;
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       ping.attribute = attackAttr;
       ping.amount = damage;
       return [ping];
@@ -258,6 +271,7 @@ function attrOrRcvBurst(params) {
 
   if (attr == 5) {
     active.rcvBurst = mult100;
+    active.description = `${mult100 / 100}x RCV Burst for ${turnCount} turn(s).`;
   } else {
     active.burst = (monster) => {
       if (monster.getAttribute() == attr || monster.getSubattribute() == attr) {
@@ -265,6 +279,7 @@ function attrOrRcvBurst(params) {
       }
       return 1;
     }
+    active.description = `${mult100 / 100}x ${AttributeToName[attr]} Burst for ${turnCount} turn(s).`;
   }
   return active;
 }
@@ -273,6 +288,7 @@ function attrOrRcvBurst(params) {
 function massAttack(params) {
   const [turns] = params;
   return createActiveSkill({
+    description: `Mass attack for ${turns} turns.`,
     massAttack: true,
   });
 }
@@ -282,12 +298,13 @@ function fixedDamageToOneEnemy(params) {
   const [amount] = params;
 
   return createActiveSkill({
+    description: `Fixed ${amount} damage to one enemy.`,
     damage: (source) => {
       const ping = new DamagePing();
       ping.source = source;
       ping.attribute = -1;
       ping.amount = amount;
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       return [ping];
     },
   });
@@ -295,7 +312,9 @@ function fixedDamageToOneEnemy(params) {
 
 // 56 - For our purposes, the same as single target.
 function fixedDamageToAllEnemies(params) {
-  return fixedDamageToOneEnemy(params);
+  const as = fixedDamageToOneEnemy(params);
+  as.description = as.description.replace('one enemy', 'all enemies');
+  return as;
 }
 
 // 58
@@ -303,15 +322,16 @@ function scalingAttackRandomToAllEnemies(params) {
   const [attr, minMult, maxMult] = params;
 
   function range() {
-    return Math.random() * (maxMult - minMult) + minMult;
+    return Math.ceil(Math.random() * (maxMult - minMult) + minMult) / 100;
   }
 
   return createActiveSkill({
+    description: `Mass ${minMult / 100}-${maxMult / 100}x ${AttributeToName[attr]} Attack.`,
     damage: (source, team, awakeningsActive, isMultiplayer) => {
       const ping = new DamagePing();
       ping.attribute = attr;
       ping.source = source;
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       ping.multiply(range(), Round.UP);
       return [ping];
     },
@@ -320,7 +340,9 @@ function scalingAttackRandomToAllEnemies(params) {
 
 // 59 - Effectively the same as 58 for our purposes.
 function scalingAttackRandomToOneEnemy(params) {
-  return scalingAttackRandomToAllEnemies(params);
+  const as = scalingAttackRandomToAllEnemies(params);
+  as.description = as.description.replace('Mass', 'Single Target');
+  return as;
 }
 
 // 62
@@ -329,8 +351,9 @@ function enhanceOrbs(params) {
   const [attr, unusedPotency] = params;
 
   return createActiveSkill({
+    description: `Enhance ${AttributeToName[attr]} orbs.`,
     enhance: (comboContainer) => {
-      for (const combo of comboContainer.combos[COLOR_ORDER[attr]]) {
+      for (const combo of comboContainer.combos[COLORS[attr]]) {
         combo.enhanced = combo.count;
       }
     },
@@ -342,6 +365,7 @@ function fullBoard(params) {
   const attrs = params.slice(0, params.length - 1);
 
   console.warn('Full board not implemented!');
+  return copyBaseActive();
 }
 
 // 84
@@ -349,12 +373,13 @@ function scalingAttackAndSuicideSingle(params) {
   const [attr, scaleBase, scaleMax, suicideTo] = params;
 
   return createActiveSkill({
-    suicideTo: suicideTo || 0;
+    description: `Single Target ${scaleBase / 100}-${scaleMax / 100}x ${AttributeToName[attr]} Attack. Suicide to ${suicideTo}%.`,
+    suicideTo: suicideTo || 0,
     damage: (source, team, awakeningsActive, isMultiplayer) => {
       const ping = new DamagePing();
       ping.source = source;
       ping.attribute = attr;
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       let scale = scaleBase;
       if (scaleBase != scaleMax) {
         scale = Math.ceil(Math.random() * (scaleMax - scaleBase)) + scaleBase;
@@ -369,7 +394,9 @@ function scalingAttackAndSuicideSingle(params) {
 // 85
 // Effectively the same.
 function scalingAttackAndSuicideMass(params) {
-  return scalingAttackAndSuicideSingle(params);
+  const as = scalingAttackAndSuicideSingle(params);
+  as.description = as.description.replace('Single Target', 'Mass');
+  return as;
 }
 
 // 86 - Single target
@@ -378,11 +405,12 @@ function flatAttackAndSuicideSingle(params) {
   const [attr, damage, UNKNOWN, suicide100] = params;
 
   return createActiveSkill({
+    description: `Single Target ${numberWithCommas(damage)} ${AttributeToName[attr]} Attack. Suicide to ${suicide100}`,
     suicideTo: suicide100 || 0,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
       ping.source = source;
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       ping.attribute = attr;
       ping.amount = damage;
       return [ping];
@@ -392,7 +420,9 @@ function flatAttackAndSuicideSingle(params) {
 
 // 87
 function flatAttackAndSuicideMass(params) {
-  return flatAttackAndSuicideSingle(params);
+  const as = flatAttackAndSuicideSingle(params);
+  as.description = as.description.replace('Single Target', 'Mass');
+  return as;
 }
 
 // 88
@@ -400,6 +430,7 @@ function burstForOneType(params) {
   const [turn, type, mult100] = params;
 
   return createActiveSkill({
+    description: `${mult100 / 100}x Burst for ${TypeToName[type]} for ${turn} turn(s).`,
     burst: (monster) => {
       if (monster.getCard().types.includes(type)) {
         return mult100 / 100;
@@ -411,10 +442,11 @@ function burstForOneType(params) {
 
 // 90
 function burstForTwoAttributes(params) {
-  const [turnCount, attr1, attr2, atk100];
+  const [turnCount, attr1, attr2, atk100] = params;
   const attrs = new Set([attr1, attr2]);
 
   return createActiveSkill({
+    description: `${mult100 / 100}x Burst for ${AttributeToName[attr1]} and ${attr2} for ${turnCount} turn(s).`,
     burst: (monster) => {
       if (attrs.has(monster.getAttribute()) || attrs.has(monster.getSubattribute())) {
         return atk100 / 100;
@@ -426,9 +458,10 @@ function burstForTwoAttributes(params) {
 
 // 92
 function burstForTwoTypes(params) {
-  const [turnCount, type1, type2, atk100];
+  const [turnCount, type1, type2, atk100] = params;
 
   return createActiveSkill({
+    description: `${mult100 / 100}x Burst for ${TypeToName[type1]} and ${TypeToName[type2]} for ${turnCount} turn(s).`,
     burst: (monster, team, awakeningsActive, isMultiplayer) => {
       if (monster.getCard().types.includes(type1) || monster.getCard().types.includes(type2)) {
         return atk100 / 100;
@@ -443,16 +476,17 @@ function grudgeStrike(params) {
   const [isSingleTarget, attr, baseMult, maxMult, scaling] = params;
 
   return createActiveSkill({
+    description: `${isSingleTarget ? 'Single Target' : 'Mass'} ${baseMult / 100}-${maxMult / 100}x ${AttributeToName[attr]} Grudge Strike.`,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy, currentHp, maxHp) => {
       console.warn('Grudge Strike calculations KNOWN to be off by a few points of damage, beware!');
       const ping = new DamagePing();
       ping.attribute = attr;
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       ping.source = source;
 
       ping.amount = source.getAtk(isMultiplayer, awakeningsActive);
-      const multiplierScale = (maxMult - baseMult) * ((1 - (currentHp - 1) / (maxHp - 1)) ** (scaling / 100));
-      ping.multiply(baseMult + multiplierScale, Round.UP);
+      const multiplierScale = (maxMult - baseMult) * ((1 - (currentHp - 1) / (maxHp)) ** (scaling / 100));
+      ping.multiply(baseMult + multiplierScale, Round.NEAREST);
       return [ping];
     },
   });
@@ -460,17 +494,34 @@ function grudgeStrike(params) {
 
 // 116 and 138, but for actives.
 function multipleActiveSkills(params) {
-  let leaderSkill = getActiveSkillEffects(params[0]);
+  let as = getActiveSkillEffects(params[0]);
   for (const param of params.slice(1, params.length)) {
-    leaderSkill = combineActiveSkills(leaderSkill, getActiveSkillEffects(param));
+    as = combineActiveSkills(as, getActiveSkillEffects(param));
   }
-  return leaderSkill;
+  if (Array.isArray(as.description)) {
+    const pieces = new Set(as.description);
+    if (pieces.size == as.description.length) {
+      as.description = as.description.join(' ');
+    } else {
+      let description = '';
+      for (const piece of pieces) {
+        const count = as.description.filter((d) => d == piece).length;
+        if (count > 1) {
+          description += ` ${piece.substring(0, piece.length - 1)} x${count}.`;
+        } else {
+          description += ' ' + piece;
+        }
+      }
+      as.description = description.substring(1);
+    }
+  }
+  return as;
 }
 
 // 127 - Column maker
 function orbChangeColumn(params) {
   console.warn('Orb change not implemented');
-  return createActiveSkill({});
+  return copyBaseActive();
 }
 
 // 144
@@ -479,6 +530,7 @@ function scalingAttackFromTeam(params) {
   const attrs = idxsFromBits(attrBits);
 
   return createActiveSkill({
+    description: `${isSingleTarget ? 'Single Target' : 'Mass'} ${atk100 / 100}x Team ${attrs.map((attr) => AttributeToName[attr])} Attack.`,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
       ping.source = source;
@@ -489,11 +541,11 @@ function scalingAttackFromTeam(params) {
         }
         if (attrs.includes(monster.getSubattribute())) {
           const baseValue = monster.getAtk(isMultiplayer, awakeningsActive);
-          ping.amount += Math.ceil(baseValue * (monster.getAttribute() == monster.getSubattribute() ? 10 : 3));
+          ping.amount += Math.ceil(baseValue / (monster.getAttribute() == monster.getSubattribute() ? 10 : 3));
         }
       }
       ping.multiply(atk100 / 100, Round.UP);
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       return [ping];
     },
   });
@@ -504,6 +556,7 @@ function haste(params) {
   const [minTurn, maxTurn] = params;
 
   return createActiveSkill({
+    description: `${minTurn}-${maxTurn} Haste.`,
     haste: () => {
       if (minTurn == maxTurn) {
         return minTurn;
@@ -515,8 +568,9 @@ function haste(params) {
 
 // 156
 function effectFromAwakeningCount(params) {
-  const [turnCount, awakening1, awakening2, awakening3, effectFlag, mult100];
-  const filterSet = new Set([awakening1, awakening2, awakening3].filter((a) = !!a));
+  const [turnCount, awakening1, awakening2, awakening3, effectFlag, mult100] = params;
+  const awakenings = [awakening1, awakening2, awakening3].filter((a) = !!a);
+  const filterSet = new Set(awakenings);
   const active = copyBaseActive();
   let factor = 0;
   function countAwakenings(team, isMultiplayer) {
@@ -527,6 +581,7 @@ function effectFromAwakeningCount(params) {
     return count;
   }
   if (effectFlag == 1) {
+    active.description = `${mult100} Heal per ${awakenings.map((awk) => AwakeningToName[awk])} Awakening.`;
     active.heal = (monster, idc) => {
       if (!idc.effect.awakenings) {
         return 0;
@@ -534,6 +589,7 @@ function effectFromAwakeningCount(params) {
       return countAwakenings(idc.getActiveTeam(), idc.isMultiplayer()) * mult100;
     };
   } else if (effectFlag == 2) {
+    active.description = `${mult100 / 100}x Burst per ${awakenings.map((awk) => AwakeningToName[awk])} Awakening.`;
     active.burst = (monster, team, awakeningsActive, isMultiplayer) => {
       if (!awakeningsActive) {
         return 1;
@@ -541,6 +597,7 @@ function effectFromAwakeningCount(params) {
       return 1 + countAwakenings(team, isMultiplayer) * mult100 / 100;
     };
   } else if (effectFlag == 3) {
+    active.description = `${mult100}% Shield per ${awakenings.map((awk) => AwakeningToName[awk])} Awakening.`;
     active.damageMult = (enemy, team, awakeningsActive, isMultiplayer) => {
       if (!awakeningsActive) {
         return 1;
@@ -563,6 +620,7 @@ function addCombos(params) {
   const [turnCount, combos] = params;
 
   return createActiveSkill({
+    description: `+${combos}c for ${turnCount} turn(s).`,
     plusCombo: combos,
   });
 }
@@ -572,11 +630,12 @@ function trueGravity(params) {
   const [percent] = params;
 
   return createActiveSkill({
+    description: `${percent}% True Gravity.`,
     damage: (source, team, awakeningsActive, isMultiplayer, enemy) => {
       const ping = new DamagePing();
       ping.source = source;
       ping.attribute = -1;
-      ping.ignoreCombo = true;
+      ping.isActive = true;
       ping.amount = Math.ceil(enemy.maxHp * percent / 100);
       return [ping];
     },
@@ -588,6 +647,7 @@ function pureSuicide(params) {
   const [suicideTo] = [params];
 
   return createActiveSkill({
+    description: `Suicide to ${suicideTo}%.`,
     suicideTo: suicideTo,
   });
 }
@@ -613,7 +673,7 @@ const ACTIVE_SKILL_GENERATORS = {
   56: fixedDamageToAllEnemies,
   58: scalingAttackRandomToOneEnemy,
   59: scalingAttackRandomToOneEnemy,
-  // 60: countAttack
+  // 60: counterAttack
   62: enhanceOrbs,
   71: fullBoard,
   84: scalingAttackAndSuicideSingle,
@@ -637,13 +697,13 @@ const ACTIVE_SKILL_GENERATORS = {
   // 141: randomOrbSpawn,
   // 142: selfAttributeChange,
   138: multipleActiveSkills,
-  // 143: scalingAttackFromTeamHp,
+  // 143: scalingAttackFromTeamHp, // This doesn't exist in NA.
   144: scalingAttackFromTeam,
   // 145: scalingRecoveryFromTeam,
   146: haste,
   // 152: lockOrbs,
   // 153: enemyAttributeChange,
-  156: burstFromAwakeningCount,
+  156: effectFromAwakeningCount,
   160: addCombos,
   161: trueGravity,
   // 172: unlock,
@@ -659,5 +719,5 @@ function getActiveSkillEffects(activeSkillId) {
     return copyBaseActive();
   }
   return ACTIVE_SKILL_GENERATORS[modelActiveSkill.internalEffectId](
-      modelActiveSkill.internalEffectId);
+      modelActiveSkill.internalEffectArguments);
 }
