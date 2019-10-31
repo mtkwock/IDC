@@ -135,6 +135,15 @@ const IdcAwakening = {
   JAMMER_BOOST: 71, POISON_BOOST: 72,
 };
 
+const PlusAwakeningMultiplier = new Map([
+  [IdcAwakening.SKILL_BOOST_PLUS, 2],
+  [IdcAwakening.TIME_PLUS, 2],
+  [IdcAwakening.RESIST_BLIND_PLUS, 2],
+  [IdcAwakening.RESIST_BLIND_PLUS, 5],
+  [IdcAwakening.RESIST_JAMMER_PLUS, 5],
+  [IdcAwakening.RESIST_POISON_PLUS, 5],
+]);
+
 const AwakeningToName = [
   'NULL',
   'HP', 'ATK', 'RCV', 'Resist Fire', 'Resist Water', 'Resist Wood', 'Resist Light', 'RESIST_DARK',

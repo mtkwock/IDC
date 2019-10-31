@@ -1932,6 +1932,7 @@ class DungeonInstance {
 
   createEnemyEditor() {
     const enemyEditor = document.createElement('div');
+    enemyEditor.style.marginTop = '5px';
     enemyEditor.appendChild(this.createEnemySelector());
 
     const enemyStatEditTable = document.createElement('table');
@@ -2143,20 +2144,6 @@ class DungeonInstance {
     };
     dungeonContainer.appendChild(titleSetter);
 
-    const floorAdder = document.createElement('div');
-    floorAdder.id = 'idc-dungeon-editor-addfloor';
-    floorAdder.innerText = 'Add Floor';
-    floorAdder.onclick = () => {
-      this.addFloor();
-    };
-    floorAdder.onmouseover = () => {
-      floorAdder.style.border = BORDER_COLOR;
-    };
-    floorAdder.onmouseleave = () => {
-      floorAdder.style.border = '';
-    };
-    dungeonContainer.appendChild(floorAdder);
-
     const floorsEditor = document.createElement('table');
     floorsEditor.id = 'idc-dungeon-editor-floors'
     floorsEditor.style.fontSize = 'small';
@@ -2179,6 +2166,21 @@ class DungeonInstance {
       floorsEditor.appendChild(floorEditor);
     }
     dungeonContainer.appendChild(floorsEditor);
+
+    const floorAdder = document.createElement('div');
+    floorAdder.id = 'idc-dungeon-editor-addfloor';
+    floorAdder.style.cursor = 'pointer';
+    floorAdder.innerText = 'Add Floor';
+    floorAdder.onclick = () => {
+      this.addFloor();
+    };
+    floorAdder.onmouseover = () => {
+      floorAdder.style.border = BORDER_COLOR;
+    };
+    floorAdder.onmouseleave = () => {
+      floorAdder.style.border = '';
+    };
+    dungeonContainer.appendChild(floorAdder);
 
     dungeonContainer.appendChild(this.createEnemyEditor());
 
@@ -4522,18 +4524,12 @@ class Idc {
       const singleAwakeningSelector = document.getElementById(`idc-awakening-count-${i + 1}`);
       if (activeMonster.id == null || i >= activeMonster.getCard().awakenings.length) {
         singleAwakeningSelector.style.display = 'none';
-      } else if (i >= activeMonster.awakenings){
-        const awakening = activeMonster.getCard().awakenings[i];
-        const [x, y] = getAwakeningOffsets(awakening);
-        singleAwakeningSelector.style.backgroundPosition = `${x * AWAKENING_SCALE}px ${y * AWAKENING_SCALE}px`; // '0px -324px';
-        singleAwakeningSelector.style.display = 'inline-block';
-        singleAwakeningSelector.style.opacity = '0.5';
       } else {
         const awakening = activeMonster.getCard().awakenings[i];
         const [x, y] = getAwakeningOffsets(awakening);
         singleAwakeningSelector.style.backgroundPosition = `${x * AWAKENING_SCALE}px ${y * AWAKENING_SCALE}px`; // '0px -324px';
         singleAwakeningSelector.style.display = 'inline-block';
-        singleAwakeningSelector.style.opacity = '1.0';
+        singleAwakeningSelector.style.opacity = i >= activeMonster.awakenings ? '0.5' : '1.0';
       }
     }
 
@@ -4719,13 +4715,44 @@ class Idc {
       baseStatEl.getElementsByClassName('idc-stat-base-hp')[0].innerText = `${team[i].getHp(mp, awoke)}`;
       baseStatEl.getElementsByClassName('idc-stat-base-atk')[0].innerText = `${team[i].getAtk(mp, awoke)}`;
       baseStatEl.getElementsByClassName('idc-stat-base-rcv')[0].innerText = `${team[i].getRcv(mp, awoke)}`;
-
+      const cdEl = baseStatEl.getElementsByClassName('idc-stat-base-cd')[0];
+      cdEl.innerText = '';
+      let totalCd = 0;
+      if (card.activeSkillId in vm.model.playerSkills) {
+        totalCd = vm.model.playerSkills[card.activeSkillId].maxCooldown;
+        cdEl.innerText += String(totalCd);
+      }
+      if (team[i].getInheritCard() && team[i].getInheritCard().activeSkillId in vm.model.playerSkills) {
+        totalCd += vm.model.playerSkills[team[i].getInheritCard().activeSkillId].maxCooldown;
+        cdEl.innerText += `(${totalCd})`;
+      }
     }
 
     document.getElementById('idc-stat-total-hp').innerText = `${this.getHp()}`;
     document.getElementById('idc-stat-total-rcv').innerText = `${this.getRcv()}`;
     for (let i = 0; i < 5; i++) {
       document.getElementById(`idc-stat-atk-${i}`).innerText = atkTotals[i];
+    }
+
+    const soloAwakenings = [
+      IdcAwakening.TIME,
+      IdcAwakening.TIME_PLUS,
+      IdcAwakening.SOLOBOOST,
+      IdcAwakening.BONUS_ATTACK,
+      IdcAwakening.BONUS_ATTACK_SUPER,
+    ];
+    for (const el of document.getElementsByClassName('idc-total-awakening-count')) {
+      // Ugly hack, extract awakening number from the id.
+      // `idc-total-awakening-count-${awakening}`
+      const awakenings = el.id.match(/[\d_]+$/)[0].split('_').map(Number);
+      let total = 0;
+      for (const awakening of awakenings) {
+        total += team.reduce((total, monster) => total + monster.countAwakening(awakening), 0) * (PlusAwakeningMultiplier.get(awakening) || 1);
+        if (this.playerMode == 2 && !soloAwakenings.includes(awakening)) {
+          total += this.getTeamAt(this.activeTeamIdx ^ 1).slice(1, 5).reduce((total, monster) => total + monster.countAwakening(awakening), 0) * (PlusAwakeningMultiplier.get(awakening) || 1);
+        }
+      }
+      el.innerText = `x${total}`;
     }
 
     this.dungeon.reloadBattleElement();
@@ -5252,21 +5279,7 @@ class Idc {
     statDisplayEl.id = 'idc-stat-display';
     statDisplayEl.style.fontSize = 'small';
     statDisplayEl.style.width = '100%';
-    // for (let i = 0; i < 7; i++) {
-    //   const row = document.createElement('tr');
-    //   statDisplayEl.appendChild(row);
-    // }
     const rows = [...statDisplayEl.getElementsByTagName('tr')];
-    // const iconRow = document.createElement('tr');
-    // for (let i = 0; i < 7; i++) {
-    //   const statIconContainer = document.createElement('td');
-    //   statIconContainer.id = `idc-stat-icon-${i}`;
-    //   if (i == 6) {
-    //     statIconContainer.innerText = 'Total';
-    //   }
-    //   rows[i].appendChild(statIconContainer);
-    // }
-    // statDisplayEl.appendChild(iconRow);
     // Includes HP, ATK, RCV of the current team..
     const baseStatRow = document.createElement('tr');
     for (let i = 0; i < 6; i++) {
@@ -5280,118 +5293,61 @@ class Idc {
       const hpRow = document.createElement('tr');
       const atkRow = document.createElement('tr');
       const rcvRow = document.createElement('tr');
+      const cdRow = document.createElement('tr');
+      cdRow.style.fontSize = '11px';
       if (i == 0) {
         const hpLabel = document.createElement('td');
         const atkLabel = document.createElement('td');
         const rcvLabel = document.createElement('td');
+        const cdLabel = document.createElement('td');
         hpLabel.style.fontSize = 'x-small';
         atkLabel.style.fontSize = 'x-small';
         rcvLabel.style.fontSize = 'x-small';
+        cdLabel.style.fontSize = 'x-small';
         hpLabel.innerText = 'HP:';
         atkLabel.innerText = 'ATK:';
         rcvLabel.innerText = 'RCV:';
+        cdLabel.innerText = 'CD: ';
         hpRow.appendChild(hpLabel);
         atkRow.appendChild(atkLabel);
-        rcvRow.appendChild(rcvLabel);        
+        rcvRow.appendChild(rcvLabel);
+        cdRow.appendChild(cdLabel);
       }
 
       const hpEl = document.createElement('td');
       const atkEl = document.createElement('td');
       const rcvEl = document.createElement('td');
+      const cdEl = document.createElement('td');
       hpEl.className = 'idc-stat-base-hp';
       atkEl.className = 'idc-stat-base-atk';
       rcvEl.className = 'idc-stat-base-rcv';
+      cdEl.className = 'idc-stat-base-cd';
       hpEl.style.textAlign = 'right';
       atkEl.style.textAlign = 'right';
       rcvEl.style.textAlign = 'right';
+      cdEl.style.textAlign = 'right';
       hpEl.innerText = '0';
       if (i != 6) {
         atkEl.innerText = '0';
       }
       rcvEl.innerText = '0';
+      cdEl.innerText = '0(0)';
       hpRow.appendChild(hpEl)
       atkRow.appendChild(atkEl);
       rcvRow.appendChild(rcvEl)
+      cdRow.appendChild(cdEl);
       miniStatTable.appendChild(hpRow);
       miniStatTable.appendChild(atkRow);
       miniStatTable.appendChild(rcvRow);
+      miniStatTable.appendChild(cdRow);
 
       statContainer.appendChild(miniStatTable);
       statCell.appendChild(statContainer);
       baseStatRow.appendChild(statCell);
     }
     statDisplayEl.appendChild(baseStatRow);
-    // const preDamageRow = document.createElement('tr');
-    // for (let i = 0; i < 6; i++) {
-    //   const preDamageContainer = document.createElement('td');
-    //   preDamageContainer.id = `idc-stat-damage-pre-${i}`;
-    //   preDamageContainer.style.textAlign = 'right';
-    //   if (i < 6) {
-    //     const mainAttr = document.createElement('div');
-    //     mainAttr.className = 'idc-stat-damage-pre-main';
-    //     mainAttr.innerText = '0';
-    //     preDamageContainer.appendChild(mainAttr);
-    //     const subAttr = document.createElement('div');
-    //     subAttr.className = 'idc-stat-damage-pre-sub';
-    //     subAttr.innerText = '0';
-    //     preDamageContainer.appendChild(subAttr);
-    //   } else {
-    //     // TODO: Total value.
-    //     const totalEl = document.createElement('div');
-    //     totalEl.id = 'idc-stat-damage-pre-total';
-    //     totalEl.innerText = '0';
-    //     preDamageContainer.appendChild(totalEl);
-    //   }
-    //   preDamageRow.appendChild(preDamageContainer);
-    // }
-    // statDisplayEl.appendChild(preDamageRow);
 
-    // // const postDamageRow = document.createElement('tr');
-    // for (let i = 0; i < 7; i++) {
-    //   const postDamageContainer = document.createElement('td');
-    //   postDamageContainer.id = `idc-stat-damage-post-${i}`;
-    //   postDamageContainer.style.textAlign = 'right';
-    //   if (i < 6) {
-    //     const mainAttr = document.createElement('div');
-    //     mainAttr.className = 'idc-stat-damage-post-main';
-    //     mainAttr.innerText = '0';
-    //     postDamageContainer.appendChild(mainAttr);
-    //     const mainAttrActual = document.createElement('div');
-    //     mainAttrActual.className = 'idc-stat-damage-post-main-actual';
-    //     mainAttrActual.innerText = '';
-    //     postDamageContainer.appendChild(mainAttrActual);
-    //     const subAttr = document.createElement('div');
-    //     subAttr.className = 'idc-stat-damage-post-sub';
-    //     subAttr.innerText = '0';
-    //     postDamageContainer.appendChild(subAttr);
-    //     const subAttrActual = document.createElement('div');
-    //     subAttrActual.className = 'idc-stat-damage-post-sub-actual';
-    //     subAttrActual.innerText = '';
-    //     postDamageContainer.appendChild(subAttrActual);
-    //   } else {
-    //     const totalEl = document.createElement('div');
-    //     totalEl.id = 'idc-stat-damage-post-total';
-    //     totalEl.innerText = '0';
-    //     postDamageContainer.appendChild(totalEl);
-    //     const totalActualEl = document.createElement('div');
-    //     totalActualEl.id = 'idc-stat-damage-post-total-actual';
-    //     totalActualEl.innerText = '';
-    //     postDamageContainer.appendChild(totalActualEl);
-    //   }
-    //   rows[i].appendChild(postDamageContainer);
-    // }
-    // statDisplayEl.appendChild(postDamageRow);
-    // SB
-    // OEs + Rows
-    // Hazards (Poison, jammer, blind, SBR)
-    // Special Hazards (clouds, immobility)
-    // True Damage (Bonus Attack, GB)
-    // Team HP/RCV
-    // Attribute Resists
-    // const aggregatedAwakeningsRow = document.createElement('tr');
-    // Determines total time to move.
-    // const timeRow = document.createElement('tr');
-    // Autoheal
+
     el.appendChild(statDisplayEl);
     const totalBaseStatEl = document.createElement('div');
 
@@ -5432,6 +5388,68 @@ class Idc {
     }
 
     el.appendChild(totalBaseStatEl);
+
+    const aggregatedAwakenings = document.createElement('div');
+    // SB
+    // OEs + Rows
+    // Hazards (Poison, jammer, blind, SBR)
+    // Special Hazards (clouds, immobility)
+    // True Damage (Bonus Attack, GB)
+    // Team HP/RCV
+    // Attribute Resists
+    // const aggregatedAwakeningsRow = document.createElement('tr');
+    // Determines total time to move.
+    // const timeRow = document.createElement('tr');
+    // Autoheal
+    const awakeningsToDisplay = [
+      [IdcAwakening.SKILL_BOOST, IdcAwakening.SKILL_BOOST_PLUS],
+      [IdcAwakening.TIME, IdcAwakening.TIME_PLUS],
+      [IdcAwakening.SOLOBOOST],
+      [IdcAwakening.BONUS_ATTACK],
+      [IdcAwakening.BONUS_ATTACK_SUPER],
+
+      // Hazards
+      [IdcAwakening.SBR],
+      [IdcAwakening.RESIST_POISON, IdcAwakening.RESIST_POISON_PLUS],
+      [IdcAwakening.RESIST_BLIND, IdcAwakening.RESIST_BLIND_PLUS],
+      [IdcAwakening.RESIST_JAMMER, IdcAwakening.RESIST_JAMMER_PLUS],
+      [IdcAwakening.RESIST_CLOUD],
+      [IdcAwakening.RESIST_TAPE],
+    ];
+    for (let i = 0; i < awakeningsToDisplay.length; i++) {
+      let awakeningCategory = awakeningsToDisplay[i];
+      let awakening = awakeningCategory[0];
+
+      let doubled = false;
+      const container = document.createElement('div');
+      container.style.display = 'inline-block';
+      const awakeningIcon = document.createElement('a');
+      awakeningIcon.style.display = 'inline-block';
+
+      awakeningIcon.style.width = `${36 * AWAKENING_SCALE}px`;
+      awakeningIcon.style.height = `${36 * AWAKENING_SCALE}px`;
+      awakeningIcon.style.backgroundSize = `${400 * AWAKENING_SCALE}px ${580 * AWAKENING_SCALE}px`;
+      awakeningIcon.style.backgroundImage = 'url(https://s3.amazonaws.com/ilmina/custom/eggs.png)';
+      awakeningIcon.style.backgroundRepeat = 'no-repeat';
+      // Position should be remapped whenever the monster changes.
+      const [x, y] = getAwakeningOffsets(awakening);
+      awakeningIcon.style.backgroundPosition = `${x * AWAKENING_SCALE}px ${y * AWAKENING_SCALE}px`;
+      container.appendChild(awakeningIcon);
+
+      const countEl = document.createElement('span');
+      countEl.className = 'idc-total-awakening-count';
+      countEl.id = `idc-total-awakening-count-${awakeningCategory.join('_')}`;
+      countEl.innerText = 'x0';
+      container.appendChild(countEl);
+
+      aggregatedAwakenings.appendChild(container);
+      container.style.padding = '3px';
+      if (i % 8 == 7) {
+        aggregatedAwakenings.appendChild(document.createElement('br'));
+      }
+    }
+    el.appendChild(aggregatedAwakenings);
+
     return el;
   }
 
@@ -5439,28 +5457,6 @@ class Idc {
     const layoutRight = document.createElement('td');
     layoutRight.style.fontSize = 'small';
     layoutRight.style.verticalAlign = 'top';
-
-    // const playerActiveRadio = document.createElement('div');
-    // for (let i = 0; i < 3; i++) {
-    //   const modeInput = document.createElement('input');
-    //   modeInput.type = 'radio';
-    //   modeInput.id = `idc-team-active-select${i + 1}`;
-    //   if (i == this.activeTeamIdx) {
-    //     modeInput.checked = true;
-    //   }
-    //   // modeInput.name = 'idc-team-active-select';
-    //   // modeInput.onclick = () => {
-    //   //   this.setActiveTeamIdx(i);
-    //   //   this.reloadStatDisplay();
-    //   // }
-    //   playerActiveRadio.appendChild(modeInput);
-    //   const modeLabel = document.createElement('label');
-    //   modeLabel.for = modeInput.id;
-    //   modeLabel.innerText = `${i + 1}P`;
-    //   playerActiveRadio.appendChild(modeLabel)
-    // }
-
-    // layoutRight.appendChild(playerActiveRadio);
 
     const hpPercentInput = document.createElement('input');
     hpPercentInput.type = 'number';
@@ -5480,9 +5476,6 @@ class Idc {
       this.reloadStatDisplay();
     }
     layoutRight.appendChild(hpPercentInput);
-
-
-    // layoutRight.appendChild(statDisplayEl);
 
     const battleEl = this.dungeon.createBattleElement();
     layoutRight.appendChild(battleEl);

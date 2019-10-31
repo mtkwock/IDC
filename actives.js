@@ -449,7 +449,7 @@ function burstForOneType(params) {
     description: `${mult100 / 100}x Burst for ${TypeToName[type]} for ${turn} turn(s).`,
     burst: {
       typeRestrictions: [type],
-      multiplier: mult/100,
+      multiplier: mult100 / 100,
     },
   });
 }
