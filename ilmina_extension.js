@@ -2710,6 +2710,17 @@ class DungeonInstance {
     opponentImage.style.marginRight = 'auto';
     el.appendChild(opponentImage);
 
+    const typeEl = document.createElement('div');
+    typeEl.id = 'idc-enemy-type';
+    typeEl.style.display = 'block';
+    typeEl.style.marginLeft = 'auto';
+    typeEl.style.marginRight = 'auto';
+    typeEl.style.textAlign = 'center';
+    if (enemyId in vm.model.cards) {
+      typeEl.innerText = vm.model.cards[enemyId].types.map((t) => TypeToName[t]).join(' / ');
+    }
+    el.appendChild(typeEl);
+
     // HP Controller
     el.appendChild(this.createEnemyHpEl());
 
@@ -2752,6 +2763,9 @@ class DungeonInstance {
     document.getElementById('idc-battle-opponent-name').innerText = enemy.getCard().name;
     const opponentImage = document.getElementById('idc-battle-opponent-img');
     opponentImage.src = CardAssets.getCroppedPortrait(vm.model.cards[enemy.id]);
+
+    const typeEl = document.getElementById('idc-enemy-type');
+    typeEl.innerText = enemy.getCard().types.map((t) => TypeToName[t]).join(' / ');
 
     // Update HP elements.
     const hpSlider = document.getElementById('idc-battle-opponent-hp-slider');
@@ -3257,6 +3271,10 @@ class ComboContainer {
    * e.g. 'rrbbgg'
    */
   doCommand(cmd) {
+    // Alias a lone 'D' to be delete all.
+    if (cmd == 'D') {
+      return this.doCommand('Daa');
+    }
     if (cmd.startsWith('Da') || cmd.startsWith('DA')) {
       return this.deleteAll(cmd.substring(2));
     }
@@ -3916,7 +3934,10 @@ class Idc {
     this.boardWidth = 6;
 
     this.combos = new ComboContainer();
-    this.combos.onUpdate.push(() => this.reloadStatDisplay());
+    this.combos.onUpdate.push(() => {
+      this.action = 0;
+      this.reloadStatDisplay();
+    });
 
     this.monsterEditingIndex = 0;
 
