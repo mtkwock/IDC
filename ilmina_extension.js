@@ -1297,6 +1297,46 @@ const TypeToKiller = {
   15: IdcAwakening.REDEEMABLE,
 };
 
+function createHpEl() {
+  const hpEl = document.createElement('div');
+  hpEl.style.paddingTop = '5px';
+  hpEl.style.paddingBottom = '10px';
+  hpEl.style.paddingLeft = '5%';
+  hpEl.style.paddingRight = '5%';
+  const hpSlider = document.createElement('input');
+  hpSlider.className = 'idc-hp-slider';
+  hpSlider.type = 'range';
+  hpSlider.min = 0;
+  hpSlider.max = 1;
+  hpSlider.style.webkitAppearance = 'none';
+  hpSlider.style.width = '100%';
+  hpSlider.style.height = '5px';
+  hpSlider.style.marginBottom = '5px';
+  hpEl.appendChild(hpSlider);
+
+  const hpInput = document.createElement('input');
+  hpInput.className = 'idc-hp-input';
+  hpInput.type = 'number';
+  hpInput.style.width = '100px';
+  hpEl.appendChild(hpInput);
+
+  const divisionSpan = document.createElement('span');
+  divisionSpan.innerText = '/';
+  hpEl.appendChild(divisionSpan);
+
+  const hpMax = document.createElement('span');
+  hpMax.className = 'idc-hp-max';
+  hpMax.innerText = '1';
+  hpMax.style.marginRight = '15px';
+  hpEl.appendChild(hpMax);
+
+  const hpPercent = document.createElement('span');
+  hpPercent.className = 'idc-hp-percent';
+  hpPercent.innerText = '100%';
+  hpEl.appendChild(hpPercent);
+  return hpEl;
+}
+
 class EnemyInstance {
   constructor() {
     // Passives that are always applied
@@ -2230,33 +2270,18 @@ class DungeonInstance {
   }
 
   createEnemyHpEl() {
-    const enemyHpEl = document.createElement('div');
-    enemyHpEl.style.paddingTop = '5px';
-    enemyHpEl.style.paddingBottom = '10px';
-    enemyHpEl.style.paddingLeft = '5%';
-    enemyHpEl.style.paddingRight = '5%';
-    const enemyHpSlider = document.createElement('input');
-    enemyHpSlider.id = 'idc-battle-opponent-hp-slider';
-    enemyHpSlider.type = 'range';
-    enemyHpSlider.min = 0;
-    enemyHpSlider.max = 1;
-    enemyHpSlider.style.webkitAppearance = 'none';
-    enemyHpSlider.style.width = '100%';
-    enemyHpSlider.style.height = '5px';
-    enemyHpSlider.style.marginBottom = '5px';
-    enemyHpSlider.onchange = () => {
-      this.getActiveEnemy().currentHp = Math.round(Number(enemyHpSlider.value));
+    const el = createHpEl();
+    const slider = el.getElementsByClassName('idc-hp-slider')[0]
+    slider.id = 'idc-battle-opponent-hp-slider';
+    slider.onchange = () => {
+      this.getActiveEnemy().currentHp = Math.round(Number(slider.value));
       this.reloadBattleElement();
     };
-    enemyHpEl.appendChild(enemyHpSlider);
-
-    const enemyHpInput = document.createElement('input');
-    enemyHpInput.id = 'idc-battle-opponent-hp-input';
-    enemyHpInput.type = 'number';
-    enemyHpInput.style.width = '100px';
-    enemyHpInput.onchange = () => {
+    const hpInput = el.getElementsByClassName('idc-hp-input')[0];
+    hpInput.id = 'idc-battle-opponent-hp-input';
+    hpInput.onchange = () => {
       const enemy = this.getActiveEnemy();
-      enemy.currentHp = Number(enemyHpInput.value);
+      enemy.currentHp = Number(hpInput.value);
       if (enemy.currentHp > enemy.maxHp) {
         enemy.currentHp = enemy.maxHp;
       }
@@ -2265,23 +2290,13 @@ class DungeonInstance {
       }
       this.reloadBattleElement();
     };
-    enemyHpEl.appendChild(enemyHpInput);
 
-    const divisionSpan = document.createElement('span');
-    divisionSpan.innerText = '/';
-    enemyHpEl.appendChild(divisionSpan);
+    const hpMax = el.getElementsByClassName('idc-hp-max')[0];
+    hpMax.id = 'idc-battle-opponent-hp-max';
 
-    const enemyHpMax = document.createElement('span');
-    enemyHpMax.id = 'idc-battle-opponent-hp-max';
-    enemyHpMax.innerText = '1';
-    enemyHpMax.style.marginRight = '15px';
-    enemyHpEl.appendChild(enemyHpMax);
-
-    const enemyHpPercent = document.createElement('span');
-    enemyHpPercent.id = 'idc-battle-opponent-hp-percent';
-    enemyHpPercent.innerText = '100%';
-    enemyHpEl.appendChild(enemyHpPercent);
-    return enemyHpEl;
+    const hpPercent = el.getElementsByClassName('idc-hp-percent')[0];
+    hpPercent.id = 'idc-battle-opponent-hp-percent';
+    return el;
   }
 
   createOpponentSetter() {
@@ -2485,7 +2500,6 @@ class DungeonInstance {
     }
     const options = [];
 
-    // const actionSelect = document.createElement('select');
     const comboOption = document.createElement('option');
     comboOption.id = `idc-battle-team-action-combo`;
     comboOption.innerText = 'Combos';
@@ -2518,7 +2532,6 @@ class DungeonInstance {
       }
       actionOption.value = i + 1;
       options.push(actionOption);
-      // actionSelect.appendChild(actionOption)
     }
     return options;
   }
@@ -2770,7 +2783,7 @@ class DungeonInstance {
     const hpInput = document.getElementById('idc-battle-opponent-hp-input');
     hpInput.value = enemy.currentHp;
     const hpMax = document.getElementById('idc-battle-opponent-hp-max');
-    hpMax.innerText = enemy.maxHp;
+    hpMax.innerText = numberWithCommas(enemy.maxHp);
     const hpPercent = document.getElementById('idc-battle-opponent-hp-percent');
     hpPercent.innerText = `${enemy.currentHp * 100 / enemy.maxHp}`.substring(0, 5) + '%';
 
@@ -3950,6 +3963,7 @@ class Idc {
     // TODO: Make this updatable.
     this.effects = {
       awakenings: true,
+      currentHp: 0,
       skillUsed: true,
       damageMult: 1, // Resist.
       burst: {
@@ -3963,18 +3977,38 @@ class Idc {
       ignoreAttributeAbsorb: false,
       ignoreDamageVoid: false,
       ignoreAttributeDamage: [], // 100% damage resist.
+      time: {
+        isMult: false,
+        bonus: 0,
+      },
       rcvMult: 1,
-      fixedHp: -1,
+      fixedHp: 0,
     };
 
     // Action 0 is a combo.
     // 
     this.action = 0;
+  }
 
-    // TODO: Make this updatable.
-    this.skillUsed = true;
-
-    this.hpPercent = 100;
+  resetEffects() {
+    const effects = this.effects;
+    effects.awakenings = true;
+    effects.currentHp = this.getHp();
+    effects.skillUsed = false;
+    effects.damageMult = 1;
+    effects.burst.attrRestrictions.length = 0;
+    effects.burst.typeRestrictions.length = 0;
+    effects.burst.awakenings.length = 0;
+    effects.burst.multiplier = 1;
+    effects.burst.awakeningScale = 0;
+    effects.ignoreDamageAbsorb = false;
+    effects.ignoreAttributeAbsorb = false;
+    effects.ignoreDamageVoid = false;
+    effects.ignoreAttributeDamage.length = 0;
+    effects.time.isMult = false;
+    effects.time.bonus = 0;
+    effects.rcvMult = 1;
+    effects.fixedHp = 0;
   }
 
   toPdchu() {
@@ -4044,7 +4078,10 @@ class Idc {
   }
 
   getHpPercent() {
-    return this.hpPercent;  // TODO: Make this value changeable.
+    if (this.getHp() == 0) {
+      return 100;
+    }
+    return Math.ceil(100 * this.effects.currentHp / this.getHp());
   }
 
   toJson() {
@@ -4076,10 +4113,11 @@ class Idc {
     if (!teamJson) {
       return;
     }
-    this.fromJson(teamJson);      
+    this.fromJson(teamJson);
     this.monsterEditingIndex = 0;
     document.getElementById('idc-team-title').value = this.title;
     document.getElementById('idc-team-description').value = this.description;
+    this.resetEffects();
     this.reloadTeamIcons();
     this.reloadMonsterEditor();
     document.getElementById(`idc-team-mode-select${this.playerMode}`).checked = true;
@@ -4102,6 +4140,9 @@ class Idc {
   }
 
   getHp() {
+    if (this.effects.fixedHp) {
+      return this.effects.fixedHp;
+    }
     const monsters = this.getActiveTeam();
     const lead = getLeaderSkillEffects(monsters[0].getCard().leaderSkillId).hp;
     const helper = getLeaderSkillEffects(monsters[5].getCard().leaderSkillId).hp;
@@ -4156,6 +4197,39 @@ class Idc {
     }
 
     return Math.round(totalRcv * (1 + 0.1 * teamRcvAwakenings));
+  }
+
+  getTime() {
+    const monsters = this.getActiveTeam();
+    const lead = getLeaderSkillEffects((monsters[0].getCard() || {}).leaderSkillId);
+    const helper = getLeaderSkillEffects((monsters[5].getCard() || {}).leaderSkillId);
+
+    if (lead.fixedTime || helper.fixedTime) {
+      return [lead.fixedTime, helper.fixedTime].filter((t) => t > 0).reduce((min, next) => (min < next) ? min : next);
+    }
+
+    if (this.dungeon.fixedTime) {
+      return this.dungeon.fixedTime;
+    }
+
+    let time = 5;
+
+    time += lead.timeExtend + helper.timeExtend;
+
+    for (const monster of monsters) {
+      time += monster.countAwakening(IdcAwakening.TIME) * 0.5;
+      time += monster.countAwakening(IdcAwakening.TIME_PLUS);
+      time += monster.latents.filter((l) => l == Latent.TIME).length * 0.05;
+      time += monster.latents.filter((l) => l == Latent.TIME_PLUS).length * 0.12;
+    }
+
+    if (this.effects.time.isMult) {
+      time *= this.effects.time.bonus;
+    } else {
+      time += this.effects.time.bonus;
+    }
+
+    return time;
   }
 
   getDamagePre() {
@@ -4289,7 +4363,7 @@ class Idc {
     let trueBonusAttack = 0;
 
     // No matching conditionals for this recovery.
-    const partialRcv = (lead, monster) => lead.rcv(monster, monsters, percent, this.skillUsed, MP);
+    const partialRcv = (lead, monster) => lead.rcv(monster, monsters, percent, this.effects.skillUsed, MP);
 
     for (const combo of this.combos.combos['h']) {
       let multiplier = (combo.count + 1) * 0.25;
@@ -4318,8 +4392,8 @@ class Idc {
 
     // Add combos with Leader skill.
     this.combos.bonusCombos = (
-      lead.plusCombo(monsters, percent, this.combos, this.skillUsed, MP) +
-      helper.plusCombo(monsters, percent, this.combos, this.skillUsed, MP));
+      lead.plusCombo(monsters, percent, this.combos, this.effects.skillUsed, MP) +
+      helper.plusCombo(monsters, percent, this.combos, this.effects.skillUsed, MP));
 
     const comboMultiplier = this.combos.comboCount() * 0.25 + 0.75;
 
@@ -4397,15 +4471,15 @@ class Idc {
       }
     }
 
-    const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.skillUsed, MP);
+    const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.effects.skillUsed, MP);
     // Apply leader skills.
     for (const ping of pings) {
       const multiplier = partialLead(lead, ping) * partialLead(helper, ping);
       ping.multiply(multiplier, Round.NEAREST);
     }
 
-    trueBonusAttack += lead.trueBonusAttack(monsters[0], monsters, percent, this.combos, this.skillUsed, MP);
-    trueBonusAttack += helper.trueBonusAttack(monsters[0], monsters, percent, this.combos, this.skillUsed, MP);
+    trueBonusAttack += lead.trueBonusAttack(monsters[0], monsters, percent, this.combos, this.effects.skillUsed, MP);
+    trueBonusAttack += helper.trueBonusAttack(monsters[0], monsters, percent, this.combos, this.effects.skillUsed, MP);
 
     // Handle damage cap.
     for (const ping of pings) {
@@ -4467,6 +4541,9 @@ class Idc {
       throw `Index should be [0, ${this.players}]`;
     }
     this.activeTeamIdx = idx;
+    if (this.playerMode != 2) {
+      this.effects.currentHp = this.getHp();
+    }
     this.reloadStatDisplay();
     // TODO: Update visuals and calculations when this happens.
   }
@@ -4744,6 +4821,7 @@ class Idc {
     for (let i = 0; i < 5; i++) {
       document.getElementById(`idc-stat-atk-${i}`).innerText = atkTotals[i];
     }
+    document.getElementById('idc-stat-total-time').innerText = `${this.getTime()}s`;
 
     const soloAwakenings = [
       IdcAwakening.TIME,
@@ -4764,6 +4842,27 @@ class Idc {
         }
       }
       el.innerText = `x${total}`;
+    }
+
+    const maxHp = this.getHp();
+    const hpSlider = document.getElementById('idc-player-hp-slider');
+    hpSlider.max = maxHp;
+    hpSlider.value = this.effects.currentHp;
+    const hpInput = document.getElementById('idc-player-hp-input');
+    hpInput.value = this.effects.currentHp;
+    const hpMax = document.getElementById('idc-player-hp-max');
+    hpMax.innerText = numberWithCommas(maxHp);
+    const hpPercent = document.getElementById('idc-player-hp-percent');
+    const currentPercent = this.getHpPercent();
+    hpPercent.innerText = `${currentPercent}%`;
+    if (currentPercent <= 50) {
+      hpPercent.style.color = 'red';
+    } else if (currentPercent <= 80) {
+      hpPercent.style.color = 'yellow';
+    } else if (currentPercent <= 99) {
+      hpPercent.style.color = 'cyan';
+    } else {
+      hpPercent.style.color = 'limegreen';
     }
 
     this.dungeon.reloadBattleElement();
@@ -5291,6 +5390,36 @@ class Idc {
     return layoutMiddle;
   }
 
+  createPlayerHpEl() {
+    const el = createHpEl();
+    const slider = el.getElementsByClassName('idc-hp-slider')[0];
+    slider.id = 'idc-player-hp-slider';
+    slider.style.background = 'hotpink';
+    slider.onchange = () => {
+      this.effects.currentHp = Math.round(Number(slider.value));
+      this.reloadStatDisplay();
+    };
+    const hpInput = el.getElementsByClassName('idc-hp-input')[0];
+    hpInput.id = 'idc-player-hp-input';
+    hpInput.onchange = () => {
+      this.effects.currentHp = Number(hpInput.value);
+      if (this.effects.currentHp > this.getHp()) {
+        this.effects.currentHp = this.getHp();
+      }
+      if (this.effects.currentHp < 0) {
+        this.effects.currentHp = 0;
+      }
+      this.reloadStatDisplay();
+    };
+
+    const hpMax = el.getElementsByClassName('idc-hp-max')[0];
+    hpMax.id = 'idc-player-hp-max';
+
+    const hpPercent = el.getElementsByClassName('idc-hp-percent')[0];
+    hpPercent.id = 'idc-player-hp-percent';
+    return el;
+  }
+
   createStatDisplay() {
     // 7 rows showing stats of the currently active team.
     const el = document.createElement('div');
@@ -5391,6 +5520,18 @@ class Idc {
     totalRcvEl.innerText = '0';
     totalBaseStatEl.appendChild(totalRcvEl);
 
+    const totalTimeLabel = document.createElement('div');
+    totalTimeLabel.style.display = 'inline-block';
+    totalTimeLabel.innerText = 'Time: ';
+    totalBaseStatEl.appendChild(totalTimeLabel);
+
+    const totalTimeEl = document.createElement('div');
+    totalTimeEl.id = 'idc-stat-total-time';
+    totalTimeEl.style.display = 'inline-block';
+    totalTimeEl.style.padding = '10px';
+    totalTimeEl.style.innerText = '5s';
+    totalBaseStatEl.appendChild(totalTimeEl);
+
     totalBaseStatEl.appendChild(document.createElement('br'));
     const totalAtkLabel = document.createElement('div');
     totalAtkLabel.style.display = 'inline-block';
@@ -5416,7 +5557,6 @@ class Idc {
     // True Damage (Bonus Attack, GB)
     // Team HP/RCV
     // Attribute Resists
-    // const aggregatedAwakeningsRow = document.createElement('tr');
     // Determines total time to move.
     // const timeRow = document.createElement('tr');
     // Autoheal
@@ -5469,6 +5609,8 @@ class Idc {
     }
     el.appendChild(aggregatedAwakenings);
 
+    el.appendChild(this.createPlayerHpEl());
+
     return el;
   }
 
@@ -5476,25 +5618,6 @@ class Idc {
     const layoutRight = document.createElement('td');
     layoutRight.style.fontSize = 'small';
     layoutRight.style.verticalAlign = 'top';
-
-    const hpPercentInput = document.createElement('input');
-    hpPercentInput.type = 'number';
-    hpPercentInput.id = 'idc-team-hp-percent';
-    hpPercentInput.value = this.hpPercent;
-    hpPercentInput.style.width = '50px';
-    hpPercentInput.onkeyup = () => {
-      let hpPercent = hpPercentInput.value;
-      if (!hpPercent || hpPercent <= 0) {
-        hpPercent = 1;
-      }
-      if (hpPercent > 100) {
-        hpPercent = 100;
-      }
-      this.hpPercent = hpPercent;
-      hpPercentInput.value = hpPercent;
-      this.reloadStatDisplay();
-    }
-    layoutRight.appendChild(hpPercentInput);
 
     const battleEl = this.dungeon.createBattleElement();
     layoutRight.appendChild(battleEl);

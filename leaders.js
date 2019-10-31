@@ -7,6 +7,7 @@ const baseLeaderSkill = Object.freeze({
   drumEffect: false,
   // If nonzero, overrides all other time.
   fixedTime: 0,
+  timeExtend: 0,
   // Multiplicative values
   hp: (monster, team, isMultiplayer) => {
     return 1;
@@ -35,9 +36,6 @@ const baseLeaderSkill = Object.freeze({
   exp: 1,
   // Additive values
   plusCombo: (team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-    return 0;
-  },
-  timeExtend: (monster, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 0;
   },
   heal: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
@@ -105,11 +103,9 @@ function combineLeaderSkills(ls1, ls2) {
     plusCombo: (...args) => {
       return ls1.plusCombo(...args) + ls2.plusCombo(...args);
     },
-    timeExtend: (...args) => {
-      return ls1.timeExtend(...args) + ls2.timeExtend(...args);
-    },
+    timeExtend: ls1.timeExtend + ls2.timeExtend,
     heal: (...args) => {
-      return ls1.timeExtend(...args) + ls2.timeExtend(...args);
+      return ls1.heal(...args) + ls2.heal(...args);
     },
     // Concatenating comboContainer.
     trueBonusAttack: (...args) => {
@@ -148,7 +144,7 @@ function bonusAttackScale(params) {
 function pureTimeExtend(params) {
   const [centiSeconds] = params;
   return createLeaderSkill({
-    timeExtend: () => centiSeconds / 100,
+    timeExtend: centiSeconds / 100,
   });
 }
 
@@ -485,7 +481,7 @@ function stackingStatboostsForAttributes(params) {
       if (attr == attrA || subattr == attrA) {
         multiplier *= attrAmult;
       }
-      if (attr = attrB || subattr == attrB) {
+      if (attr == attrB || subattr == attrB) {
         multiplier *= attrBmult;
       }
       return multiplier;    
@@ -782,10 +778,10 @@ function atkShieldFromHp(params) {
 
 // 185, e.g. Karin Shindou [Dark Color].
 function moveTimeAndBaseStatFromAttributeType(params) {
-  const [ms100, attrBits, typeBits, hp100, atk100, rcv100] = params;
+  const [s100, attrBits, typeBits, hp100, atk100, rcv100] = params;
   const leaderSkill = baseStatFromAttributeType(
       [attrBits, typeBits, hp100, atk100, rcv100]);
-  leaderSkill.timeExtend = () => (ms100 / 100);
+  leaderSkill.timeExtend = s100 / 100;
   return leaderSkill;
 }
 
