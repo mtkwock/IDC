@@ -830,10 +830,10 @@ function atkAndCombosFromRainbow(params) {
   function didActivate(monsters, comboContainer) {
     // First find relevant colors that were matched.
     return matchedAttr = attrs.filter((attr) => {
-      return comboContainer[COLORS[attr]].length > 0;
+      return comboContainer.combos[COLORS[attr]].length > 0;
     }).filter((attr) => {
       // Then find if the team attacked with those colors.
-      return attr > 4 || team.some((monster) => {
+      return attr > 4 || monsters.some((monster) => {
         return (monster.getAttribute() == attr) || (monster.getCard().subattribute == attr);
       });
     }).length >= minColors;
