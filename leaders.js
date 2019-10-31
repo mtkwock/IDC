@@ -1022,5 +1022,3 @@ function testVoniaLs() {
     console.error('Dragon without 6+ should be 3');
   }
 }
-
-console.log('Leader skills initialized.');

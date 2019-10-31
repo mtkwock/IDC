@@ -376,8 +376,7 @@ function scalingAttackRandomToOneEnemy(params) {
 // 71
 function fullBoard(params) {
   const attrs = params.slice(0, params.length - 1);
-
-  console.warn('Full board not implemented!');
+  // console.warn('Full board not implemented!');
   return copyBaseActive();
 }
 
@@ -685,7 +684,7 @@ const ACTIVE_SKILL_GENERATORS = {
   58: scalingAttackRandomToOneEnemy,
   59: scalingAttackRandomToOneEnemy,
   // 60: counterAttack
-  71: fullBoard,
+  71: fullBoard, // Does nothing right now.
   84: scalingAttackAndSuicideSingle,
   85: scalingAttackAndSuicideMass,
   86: flatAttackAndSuicideSingle,
@@ -731,10 +730,15 @@ const ACTIVE_SKILL_GENERATORS = {
   // 196: reduceUnmatchable,
 };
 
+const warnedAs = new Set();
+
 function getActiveSkillEffects(activeSkillId) {
   const modelActiveSkill = vm.model.playerSkills[activeSkillId];
   if (!(modelActiveSkill.internalEffectId in ACTIVE_SKILL_GENERATORS)) {
-    console.log(`Active Effect ${activeSkillId} of type ${modelActiveSkill.internalEffectId} not implemented.`);
+    if (!warnedAs.has(activeSkillId)) {
+      console.log(`Active Effect ${activeSkillId} of type ${modelActiveSkill.internalEffectId} not implemented.`);
+      warnedAs.add(activeSkillId);
+    }
     return copyBaseActive();
   }
   return ACTIVE_SKILL_GENERATORS[modelActiveSkill.internalEffectId](
