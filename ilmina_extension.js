@@ -1740,9 +1740,6 @@ class DungeonInstance {
       option.onclick = () => {
         options.style.display = 'none';
         let value = Number(option.value);
-        if ((value + 100000) in vm.model.cards) {
-          value += 100000;
-        }
         enemySelector.value = value;
         const enemy = this.getActiveEnemy();
         enemy.setId(enemySelector.value);
@@ -1763,10 +1760,6 @@ class DungeonInstance {
     enemySelector.onkeyup = (e) => {
       if (e.keyCode == 13) {
         let value = Number(document.getElementById(`idc-enemy-select-option-0`).value);
-        if ((value + 100000) in vm.model.cards) {
-          value += 100000;
-        }
-        // console.log(`Changing monster id to ${value}`);
         const enemy = this.getActiveEnemy();
         enemy.setId(value);
         if (value in vm.model.cards) {
@@ -1788,7 +1781,7 @@ class DungeonInstance {
         return;
       }
       options.style.display = 'block';
-      const fuzzyMatches = fuzzyMonsterSearch(currentText, maxResults);
+      const fuzzyMatches = fuzzyMonsterSearch(currentText, maxResults, prioritizedEnemySearch);
       for (let i = 0; i < fuzzyMatches.length && i < maxResults; i++) {
         const option = document.getElementById(`idc-enemy-select-option-${i}`);
         const key = fuzzyMatches[i];
@@ -3533,9 +3526,11 @@ class TabbedComponent {
 // To be loaded.
 let prioritizedMonsterSearch;
 let prioritizedInheritSearch;
+let prioritizedEnemySearch;
 let prefixToCardIds = {};
 
 function loadMonsterSearches() {
+  prioritizedEnemySearch = Object.values(vm.model.cards).reverse();
   prioritizedMonsterSearch = Object.values(vm.model.cards).filter((card) => {
     return Number(card.id) < 6000;
   }).sort((card1, card2) => {
@@ -4533,6 +4528,22 @@ class Idc {
       }
     }
 
+    const inheritCard = activeMonster.getInheritCard();
+    let assistAwakenings = [];
+    if (inheritCard && inheritCard.awakenings[0] == IdcAwakening.AWOKEN_ASSIST) {
+      assistAwakenings = inheritCard.awakenings;
+    }
+    for (let i = 0; i < 9; i++) {
+      const inheritAwakeningEl = document.getElementById(`idc-awakening-inherit-${i}`);
+      if (i >= assistAwakenings.length) {
+        inheritAwakeningEl.style.display = 'none';
+        continue;
+      }
+      inheritAwakeningEl.style.display = 'inline-block';
+      const [x, y] = getAwakeningOffsets(assistAwakenings[i]);
+      inheritAwakeningEl.style.backgroundPosition = `${x * AWAKENING_SCALE}px ${y * AWAKENING_SCALE}px`;
+    }
+
     // Super Awakenings
     for (let i = 0; i < 9; i++) {
       const saSelector = document.getElementById(`idc-super-awakening-${i + 1}`);
@@ -5011,6 +5022,7 @@ class Idc {
       const singleAwakeningSelector = document.createElement('a');
       singleAwakeningSelector.id = `idc-awakening-count-${i + 1}`;
       singleAwakeningSelector.style.display = 'none';
+      singleAwakeningSelector.style.cursor = 'pointer';
       singleAwakeningSelector.style.width = `${36 * AWAKENING_SCALE}px`;
       singleAwakeningSelector.style.height = `${36 * AWAKENING_SCALE}px`;
       singleAwakeningSelector.style.backgroundSize = `${400 * AWAKENING_SCALE}px ${580 * AWAKENING_SCALE}px`;
@@ -5028,6 +5040,24 @@ class Idc {
 
     awakeningEditor.appendChild(awakeningSelector);
 
+    const inheritAwakeningDisplay = document.createElement('div');
+
+    for (let i = 0; i < 9; i++) {
+      const inheritAwakening = document.createElement('a');
+      inheritAwakening.id = `idc-awakening-inherit-${i}`;
+      inheritAwakening.style.display = 'none';
+      inheritAwakening.style.width = `${36 * AWAKENING_SCALE}px`;
+      inheritAwakening.style.height = `${36 * AWAKENING_SCALE}px`;
+      inheritAwakening.style.backgroundSize = `${400 * AWAKENING_SCALE}px ${580 * AWAKENING_SCALE}px`;
+      inheritAwakening.style.backgroundImage = 'url(https://s3.amazonaws.com/ilmina/custom/eggs.png)';
+      inheritAwakening.style.backgroundRepeat = 'no-repeat';
+      inheritAwakening.style.backgroundPosition = `0px ${-324 * AWAKENING_SCALE}px`;
+      inheritAwakeningDisplay.appendChild(inheritAwakening);
+    }
+
+    awakeningEditor.appendChild(inheritAwakeningDisplay)
+
+
     const superAwakeningSelector = document.createElement('div');
     superAwakeningSelector.appendChild(document.createTextNode('Super Awakening:'));
     superAwakeningSelector.appendChild(document.createElement('br'));
@@ -5036,6 +5066,7 @@ class Idc {
       const saSelector = document.createElement('a');
       saSelector.id = `idc-super-awakening-${i + 1}`;
       saSelector.style.display = 'inline-block';
+      saSelector.style.cursor = 'pointer';
       saSelector.style.width = `${36 * AWAKENING_SCALE}px`;
       saSelector.style.height = `${36 * AWAKENING_SCALE}px`;
       saSelector.style.backgroundSize = `${400 * AWAKENING_SCALE}px ${580 * AWAKENING_SCALE}px`;
@@ -5060,6 +5091,7 @@ class Idc {
       const currentLatentSelector = document.createElement('a');
       currentLatentSelector.id = `idc-selected-latent-awakening-${i}`;
       currentLatentSelector.style.display = 'none';
+      currentLatentSelector.style.cursor = 'pointer';
       // Width should be changed.
       currentLatentSelector.style.width = `${36 * AWAKENING_SCALE}px`;
       currentLatentSelector.style.height = `${36 * AWAKENING_SCALE}px`;
@@ -5095,6 +5127,7 @@ class Idc {
       const latentSelector = document.createElement('a');
       latentSelector.id = `idc-latent-awakening-${i + 1}`;
       latentSelector.style.display = 'inline-block';
+      latentSelector.style.cursor = 'pointer';
       latentSelector.style.width = isSuper ? `${76 * AWAKENING_SCALE}px` : `${36 * AWAKENING_SCALE}px`;
       latentSelector.style.height = `${36 * AWAKENING_SCALE}px`;
       latentSelector.style.backgroundSize = `${400 * AWAKENING_SCALE}px ${580 * AWAKENING_SCALE}px`
@@ -5133,8 +5166,6 @@ class Idc {
     const monsterEditor = document.createElement('div');
     monsterEditor.id = 'idc-monster-editor';
     monsterEditor.style.padding = '5px';
-    // monsterEditor.style.borderLeft = BORDER_COLOR;
-    // monsterEditor.style.borderRight = BORDER_COLOR;
 
     const pdchuIO = document.createElement('div');
     const ioArea = document.createElement('textarea');
@@ -5194,18 +5225,6 @@ class Idc {
     const layoutLeft = document.createElement('td');
     layoutLeft.style.paddingRight = '10px';
     layoutLeft.style.verticalAlign = 'top';
-
-    // const debugInput = document.createElement('textarea');
-    // layoutLeft.appendChild(debugInput);
-    // const debugButton = document.createElement('button');
-    // debugButton.innerText = 'DEBUG';
-    // debugButton.onclick = () => {
-    //   console.log(this.toPdchu());
-    //   this.fromPdchu(debugInput.value);
-    //   // this.monsters[0].fromPdchu();
-    // }
-
-    // layoutLeft.appendChild(debugButton);
 
     const monsterEditorElement = this.createMonsterEditor();
     const comboEditorElement = this.combos.createElement(this);
