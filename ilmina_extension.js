@@ -3107,7 +3107,7 @@ class ComboContainer {
           const enhancedInput = document.createElement('input');
           enhancedInput.onblur = () => {
             if (i >= this.combos[c].length) {
-              enhancedInput.value = 0;
+              enhancedInput.value = '';
               return;
             }
             let num = Number(enhancedInput.value);
