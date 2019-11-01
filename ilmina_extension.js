@@ -4163,6 +4163,7 @@ class Idc {
         this.monsters[activeIdx].getCard() :
         this.monsters[activeIdx].getInheritCard();
     const effects = getActiveSkillEffects(card.activeSkillId);
+    const heal = effects.heal(this.monsters[activeIdx], this);
     return {
       pings: effects.damage(
         this.monsters[activeIdx],
@@ -4170,9 +4171,9 @@ class Idc {
         this.effects.awakenings,
         this.isMultiplayer(),
         this.dungeon.getActiveEnemy(),
-        this.getHpPercent() * this.getHp(),
+        this.effects.currentHp,
         this.getHp()),
-      healing: 0, // TODO
+      healing: heal, // TODO
       trueBonusAttack: 0,
       bonusAttacks: [],
     }
@@ -5658,7 +5659,7 @@ class Idc {
 
     if (this.action > 0) {
       const monsterIdx = Math.floor((this.action - 1) / 2);
-      const isInherit = this.action % 2 == 0;
+      const isInherit = this.action % 2 == 1;
 
       const monster = this.monsters[monsterIdx];
       const card = isInherit ? monster.getCard() : monster.getInheritCard();

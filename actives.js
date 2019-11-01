@@ -471,7 +471,7 @@ function burstForTwoTypes(params) {
   const [turnCount, type1, type2, atk100] = params;
 
   return createActiveSkill({
-    description: `${mult100 / 100}x Burst for ${TypeToName[type1]} and ${TypeToName[type2]} for ${turnCount} turn(s).`,
+    description: `${atk100 / 100}x Burst for ${TypeToName[type1]} and ${TypeToName[type2]} for ${turnCount} turn(s).`,
     burst: {
       typeRestrictions: [type1, type2],
       multiplier: atk100 / 100,
