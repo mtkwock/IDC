@@ -458,7 +458,7 @@ function burstForTwoAttributes(params) {
   const [turnCount, attr1, attr2, atk100] = params;
 
   return createActiveSkill({
-    description: `${mult100 / 100}x Burst for ${AttributeToName[attr1]} and ${attr2} for ${turnCount} turn(s).`,
+    description: `${atk100 / 100}x Burst for ${AttributeToName[attr1]} and ${attr2} for ${turnCount} turn(s).`,
     burst: {
       attributeRestrictions: [attr1, attr2],
       multiplier: atk100 / 100,

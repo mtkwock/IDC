@@ -5645,6 +5645,8 @@ class Idc {
       }
     }
 
+    const totalDamage = enemy.currentHp - enemyHp;
+
     enemy.currentHp = enemyHp;
     if (enemy.currentHp * 2 < enemy.maxHp && enemy.currentAttribute == -1) {
       enemy.currentAttribute = -2;
@@ -5665,7 +5667,34 @@ class Idc {
       const card = isInherit ? monster.getCard() : monster.getInheritCard();
       if (card && (card.activeSkillId in vm.model.playerSkills)) {
         const active = getActiveSkillEffects(card.activeSkillId);
+
         console.log(active);
+
+        // Handle suicide
+        if (active.suicideTo != 100) {
+          let hp = this.effects.currentHp * active.suicideTo / 100;
+          if (hp <= 1) {
+            hp = 1;
+          }
+          hp = Math.ceil(hp);
+          this.effects.currentHp = hp;
+        }
+
+        // Handle Burst
+
+        // Handle Time Extend
+
+        // Handle Attribute changing
+
+        // Handle Defense Break
+
+        // Handle +c
+
+        // Handle Swap (lmao)
+
+        // Handle healing from damage
+
+        // Handle attribute/damage/void void
       }
 
     }
