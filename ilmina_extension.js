@@ -454,7 +454,7 @@ class MonsterInstance {
     }
 
     // If the awakening level is above the max level of the new card OR
-    // the awakening level is maxed out from previously, set awakeing level to
+    // the awakening level is maxed out from previously, set awakening level to
     // c's max awakening level.
     if (this.awakenings > c.awakenings.length ||
         !this.card || this.awakenings == this.card.awakenings.length) {
@@ -1388,7 +1388,7 @@ class EnemyInstance {
     return this.currentAttribute;
   }
 
-  calcDamage(ping, pings, comboContainer, isMultiplayer) {
+  calcDamage(ping, pings, comboContainer, isMultiplayer, voids) {
     let currentDamage = ping.amount;
     const types = vm.model.cards[this.id] ? vm.model.cards[this.id].types : [];
     // Attribute Advantage
@@ -1439,15 +1439,15 @@ class EnemyInstance {
     // Void
     if (this.damageVoid > 0
         && currentDamage > this.damageVoid
-        && !this.ignoreDamageVoid
+        && !voids.damageVoid
         && (!(COLORS[ping.attribute] in comboContainer.combos) ||
             comboContainer.combos[COLORS[ping.attribute]].every((combo) => combo.shape != Shape.BOX))) {
       currentDamage = 0;
     }
 
     // Absorbs
-    if (this.attributeAbsorb.includes(ping.attribute) && !this.ignoreAttributeAbsorb ||
-        this.damageAbsorb > 0 && currentDamage >= this.damageAbsorb && !this.ignoreDamageAbsorb ||
+    if (this.attributeAbsorb.includes(ping.attribute) && !voids.attributeAbsorb ||
+        this.damageAbsorb > 0 && currentDamage >= this.damageAbsorb && !voids.damageAbsorb ||
         this.comboAbsorb > 0 && comboContainer.comboCount() <= this.comboAbsorb && !ping.isActive) {
       currentDamage *= -1;
     }
@@ -2764,7 +2764,11 @@ class DungeonInstance {
     // TODO: Figure out this precisely.
     const resolveActive = enemy.resolvePercent > 0 && (100 * enemy.currentHp / enemy.maxHp) > enemy.resolvePercent;
     for (const ping of pings) {
-      ping.rawDamage = enemy.calcDamage(ping, pings, this.idc.combos, this.idc.isMultiplayer());
+      ping.rawDamage = enemy.calcDamage(ping, pings, this.idc.combos, this.idc.isMultiplayer(), {
+        attributeAbsorb: this.idc.effects.ignoreAttributeAbsorb,
+        damageAbsorb: this.idc.effects.ignoreDamageAbsorb,
+        damageVoid: this.idc.effects.ignoreDamageVoid,
+      });
       let next = currentHp - ping.rawDamage;
       if (next < 0) { next = 0; }
       if (next < 1 && resolveActive) {
@@ -2986,7 +2990,8 @@ class ComboContainer {
     }
     this.boardWidth = 6;
     this.maxVisibleCombos = 14;
-    this.bonusCombos = 0;
+    this.bonusCombosLeader = 0;
+    this.bonusCombosActive = 0;
     this.onUpdate = [];
   }
 
@@ -2995,7 +3000,7 @@ class ComboContainer {
     for (const comboArrays of Object.values(this.combos)) {
       total += comboArrays.length;
     }
-    return total + this.bonusCombos;
+    return total + this.bonusCombosLeader + this.bonusCombosActive;
   }
 
   getBoardSize() {
@@ -3886,7 +3891,7 @@ class Idc {
       awakenings: true,
       currentHp: 0,
       skillUsed: true,
-      damageMult: 1, // Resist.
+      shield: 0, // Resist.
       burst: {
         attrRestrictions: [],
         typeRestrictions: [],
@@ -3915,7 +3920,7 @@ class Idc {
     const effects = this.effects;
     effects.awakenings = true;
     effects.currentHp = this.getHp();
-    effects.skillUsed = false;
+    effects.skillUsed = true;
     effects.damageMult = 1;
     effects.burst.attrRestrictions.length = 0;
     effects.burst.typeRestrictions.length = 0;
@@ -4183,7 +4188,7 @@ class Idc {
   // This is damage before hitting an opponent.
   getDamageCombos() {
     // Cleanup.
-    this.combos.bonusCombos = 0;
+    this.combos.bonusCombosLeader = 0;
 
     let monsters = this.getActiveTeam();
     const lead = monsters[0].bound ? copyBaseLeader() : getLeaderSkillEffects(monsters[0].getCard().leaderSkillId);
@@ -4268,6 +4273,25 @@ class Idc {
             multiplier *= (2.5 ** ping.source.countAwakening(IdcAwakening.VDP, MP));
             ping.vdp = true;
           }
+
+          // Handle burst.
+          const burst = this.effects.burst;
+          if (burst.typeRestrictions.length == 0 || ping.source.types.some((type) => burst.typeRestrictions.includes(type))) {
+            if (burst.attrRestrictions.length == 0 || burst.attrRestrictions.includes(ping.attribute)) {
+              let burstMultiplier = burst.multiplier;
+              if (burst.awakeningScale != 0) {
+                for (const awakening of burst.awakenings) {
+                  burstMultiplier += countAwakenings(awakening) * burst.awakeningScale;
+                  if (AwakeningToPlusAwakening.has(awakening)) {
+                    const plusAwakening = AwakeningToPlusAwakening.get(awakening);
+                    burstMultiplier += PlusAwakeningMultiplier.get(plusAwakening) * countAwakenings(plusAwakening) * burst.awakeningScale;
+                  }
+                }
+              }
+              multiplier *= burstMultiplier;
+            }
+          }
+
           const baseAtk = ping.source.getAtk(MP, this.effects.awakenings);
           // When adding a single match of damage, the value is always rounded up.
           // e.g. A monster with 1atk making a 4-match (1.25x) will do 2 damage.
@@ -4293,6 +4317,7 @@ class Idc {
         multiplier *= (1 + 0.06 * combo.enhanced);
         multiplier *= (1 + enhancedCounts.h * 0.07);
       }
+      multiplier *= this.effects.rcvMult;
       for (const monster of monsters) {
         let rcv = monster.getRcv();
         if (combo.count == 4) {
@@ -4313,7 +4338,7 @@ class Idc {
     }
 
     // Add combos with Leader skill.
-    this.combos.bonusCombos = (
+    this.combos.bonusCombosLeader = (
       lead.plusCombo(monsters, percent, this.combos, this.effects.skillUsed, MP) +
       helper.plusCombo(monsters, percent, this.combos, this.effects.skillUsed, MP));
 
@@ -4338,7 +4363,7 @@ class Idc {
       let multiplier = 1;
       if (count >= 7) {
         multiplier *= 2 ** ping.source.countAwakening(IdcAwakening.COMBO_7);
-        if (count >- 10) {
+        if (count >= 10) {
           multiplier *= 5 ** ping.source.countAwakening(IdcAwakening.COMBO_10);
         }
       }
@@ -4392,6 +4417,8 @@ class Idc {
         ping.multiply(2 ** ping.source.countAwakening(IdcAwakening.POISON_BOOST));
       }
     }
+
+    healing += countAwakenings(IdcAwakening.AUTOHEAL) * 1000;
 
     const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.effects.skillUsed, MP);
     // Apply leader skills.
@@ -4704,6 +4731,7 @@ class Idc {
       const teamRow = document.getElementById(`idc-team${i}`);
       teamRow.style.display = 'none';
     }
+    this.resetEffects();
     this.reloadStatDisplay();
   }
 
@@ -4786,6 +4814,26 @@ class Idc {
       actionSelect.appendChild(option);
     }
     actionSelect.value = this.action;
+
+    document.getElementById('idc-player-awakenings').checked = this.effects.awakenings;
+    document.getElementById('idc-player-shield').value = this.effects.shield;
+    document.getElementById('idc-player-combo').value = this.combos.bonusCombosActive;
+    document.getElementById('idc-player-void-damage-absorb').checked = this.effects.ignoreDamageAbsorb;
+    document.getElementById('idc-player-void-attr-absorb').checked = this.effects.ignoreAttributeAbsorb;
+    document.getElementById('idc-player-void-damage-void').checked = this.effects.ignoreDamageVoid;
+    document.getElementById('idc-player-fixed-hp').value = this.effects.fixedHp;
+    document.getElementById('idc-player-skill-used').checked = this.effects.skillUsed;
+
+    const burst = this.effects.burst;
+    document.getElementById('idc-player-burst-attr1').value = burst.attrRestrictions.length ? burst.attrRestrictions[0] : -1;
+    document.getElementById('idc-player-burst-attr2').value = burst.attrRestrictions.length > 1 ? burst.attrRestrictions[1] : -1;
+    document.getElementById('idc-player-burst-type1').value = burst.typeRestrictions.length ? burst.typeRestrictions[0] : -1;
+    document.getElementById('idc-player-burst-type2').value = burst.typeRestrictions.length > 1 ? burst.typeRestrictions[1] : -1;
+    document.getElementById('idc-player-burst-awakening1').value = burst.awakenings.length ? burst.awakenings[0] : -1;
+    document.getElementById('idc-player-burst-awakening2').value = burst.awakenings.length > 1 ? burst.awakenings[1] : -1;
+    document.getElementById('idc-player-burst-multiplier').value = burst.multiplier;
+    document.getElementById('idc-player-burst-rcv').value = this.effects.rcvMult;
+    document.getElementById('idc-player-burst-awakening-scale').value = burst.awakeningScale;
 
     this.dungeon.reloadBattleElement();
   }
@@ -4881,8 +4929,8 @@ class Idc {
       }
       option.onclick = () => {
         options.style.display = 'none';
-        monsterSelector.value = option.value;
-        this.monsters[this.monsterEditingIndex].setId(monsterSelector.value);
+        // monsterSelector.value = option.value;
+        this.monsters[this.monsterEditingIndex].setId(option.value);
         this.reloadTeamIcons();
         this.reloadMonsterEditor();        
       }
@@ -4891,13 +4939,13 @@ class Idc {
     monsterSelector.id = 'idc-selector-monster';
     monsterSelector.onkeyup = (e) => {
       if (e.keyCode == 13) {
-        const value = document.getElementById(`idc-monster-select-option-0`).value;
-        console.log(`Changing monster ${this.monsterEditingIndex} id to ${value}`);
-        this.monsters[this.monsterEditingIndex].setId(value);
-        this.reloadTeamIcons();
-        this.reloadMonsterEditor();
-        options.style.display = 'none';
-        return;
+        document.getElementById(`idc-monster-select-option-0`).click();
+        // console.log(`Changing monster ${this.monsterEditingIndex} id to ${value}`);
+        // this.monsters[this.monsterEditingIndex].setId(value);
+        // this.reloadTeamIcons();
+        // this.reloadMonsterEditor();
+        // options.style.display = 'none';
+        // return;
       }
       const currentText = e.target.value.toLowerCase();
       if (currentText == '') {
@@ -4949,22 +4997,25 @@ class Idc {
       }
       option.onclick = () => {
         options.style.display = 'none';
-        inheritSelector.value = option.value;
-        this.monsters[this.monsterEditingIndex].inheritId = inheritSelector.value;
+        // inheritSelector.value = option.value;
+        const monster = this.monsters[this.monsterEditingIndex];
+        monster.inheritId = option.value;
+        monster.inheritPlussed = true;
+        monster.inheritLevel = vm.model.cards[option.value].isLimitBreakable ? 110 : vm.model.cards[option.value].maxLevel;
         this.reloadTeamIcons();
-        this.reloadMonsterEditor();        
+        this.reloadMonsterEditor();  
       }
       options.appendChild(option);
     }
     inheritSelector.onkeyup = (e) => {
       if (e.keyCode == 13) {
-        const value = document.getElementById(`idc-inherit-select-option-0`).value;
-        console.log(`Changing monster inherit ${this.monsterEditingIndex} id to ${value}`);
-        this.monsters[this.monsterEditingIndex].inheritId = value;
-        this.reloadTeamIcons();
-        this.reloadMonsterEditor();
-        options.style.display = 'none';
-        return;
+        document.getElementById(`idc-inherit-select-option-0`).click();
+        // console.log(`Changing monster inherit ${this.monsterEditingIndex} id to ${value}`);
+        // this.monsters[this.monsterEditingIndex].inheritId = value;
+        // this.reloadTeamIcons();
+        // this.reloadMonsterEditor();
+        // options.style.display = 'none';
+        // return;
       }
       const currentText = e.target.value.toLowerCase();
       if (currentText == '') {
@@ -5619,7 +5670,11 @@ class Idc {
     let enemyHp = enemy.currentHp;
     const resolveActive = enemy.resolvePercent ? enemyHp * 100 / enemy.maxHp > enemy.resolvePercent : false;
     for (const ping of pings) {
-      const rawDamage = enemy.calcDamage(ping, pings, this.comboContainer, this.isMultiplayer());
+      const rawDamage = enemy.calcDamage(ping, pings, this.comboContainer, this.isMultiplayer(), {
+        attributeAbsorb: this.effects.ignoreAttributeAbsorb,
+        damageAbsorb: this.effects.ignoreDamageAbsorb,
+        damageVoid: this.effects.ignoreDamageVoid,
+      });
       enemyHp -= rawDamage;
       if (enemyHp < 0) {
         enemyHp = 0;
@@ -5638,7 +5693,11 @@ class Idc {
       bonusPing.attribute = -1;
       bonusPing.isActive = true;
 
-      const rawDamage = enemy.calcDamage(bonusPing, pings, this.comboContainer, this.isMultiplayer());
+      const rawDamage = enemy.calcDamage(bonusPing, pings, this.comboContainer, this.isMultiplayer(), {
+        attributeAbsorb: this.effects.ignoreAttributeAbsorb,
+        damageAbsorb: this.effects.ignoreDamageAbsorb,
+        damageVoid: this.effects.ignoreDamageVoid,
+      });
       enemyHp -= rawDamage;
       if (currentHp < 0) {
         enemyHp = 0;
@@ -5665,6 +5724,7 @@ class Idc {
 
       const monster = this.monsters[monsterIdx];
       const card = isInherit ? monster.getCard() : monster.getInheritCard();
+      const enemy = this.dungeon.getActiveEnemy();
       if (card && (card.activeSkillId in vm.model.playerSkills)) {
         const active = getActiveSkillEffects(card.activeSkillId);
 
@@ -5681,14 +5741,35 @@ class Idc {
         }
 
         // Handle Burst
+        if (active.burst) {
+          const burst = {};
+          burst.typeRestrictions = active.burst.typeRestrictions || [];
+          burst.attrRestrictions = active.burst.attributeRestrictions || [];
+          burst.multiplier = active.burst.multiplier || 1;
+          burst.awakenings = active.burst.awakenings || [];
+          burst.awakeningScale = active.burst.awakeningScale || 0;
+          this.effects.burst = burst;
+        }
 
         // Handle Time Extend
 
         // Handle Attribute changing
+        if (active.selfAttribute != -1) {
+          monster.attribute = active.selfAttribute;
+        }
+        if (active.enemyAttribute != -1) {
+          enemy.currentAttribute = active.enemyAttribute;
+        }
 
         // Handle Defense Break
+        if (active.defenseBreakPercent) {
+          enemy.ignoreDefensePercent = active.defenseBreakPercent;
+        }
 
         // Handle +c
+        if (active.plusCombo) {
+          this.combos.bonusCombosActive = active.plusCombo;
+        }
 
         // Handle Swap (lmao)
 
@@ -5696,7 +5777,8 @@ class Idc {
 
         // Handle attribute/damage/void void
       }
-
+      this.effects.skillUsed = true;
+      this.action = 0;
     }
 
     this.reloadBattleDisplay();
@@ -5707,30 +5789,363 @@ class Idc {
     el.appendChild(this.createPlayerHpEl());
 
     // What action to take.  0 is Combos, 1-36 are actives.
-    const actionLabel = document.createElement('div');
-    actionLabel.style.display = 'inline-block';
-    actionLabel.style.marginTop = '5px';
-    actionLabel.innerText = 'Action: ';
+    // const actionLabel = document.createElement('div');
+    // actionLabel.style.display = 'inline-block';
+    // actionLabel.style.marginTop = '5px';
+    // actionLabel.innerText = 'Action: ';
 
     const actionSelect = document.createElement('select');
     actionSelect.id = 'idc-player-action-select';
     actionSelect.style.fontSize = 'x-small';
+    actionSelect.style.maxWidth = '300px';
     for (const option of this.createActionOptions()) {
       actionSelect.appendChild(option);
     }
     actionSelect.onchange = () => {
-      console.log(actionSelect.value);
+      // console.log(actionSelect.value);
       this.action = Number(actionSelect.value);
       this.dungeon.reloadBattleElement();
     }
 
-    el.appendChild(actionLabel);
+    // el.appendChild(actionLabel);
     el.appendChild(actionSelect);
 
     const applyActionButton = document.createElement('button');
     applyActionButton.innerText = 'Apply';
     applyActionButton.onclick = () => this.doSelectedAction();
     el.appendChild(applyActionButton);
+
+    const effectsLabel = document.createElement('div');
+    const effectsTitle = document.createElement('div');
+    effectsTitle.innerText = 'Player Status';
+    effectsTitle.style.marginTop = '15px';
+    effectsTitle.style.width = '75%';
+    effectsTitle.style.fontSize = 'medium';
+    effectsTitle.style.display = 'inline-block';
+    effectsLabel.appendChild(effectsTitle);
+    const resetEffectsEl = document.createElement('button');
+    resetEffectsEl.innerText = 'Reset'
+    resetEffectsEl.onclick = () => {
+      const effects = this.effects;
+      effects.awakenings = true;
+      effects.skillUsed = true;
+      effects.shield = 0;
+      effects.ignoreDamageAbsorb = false;
+      effects.ignoreAttributeAbsorb = false;
+      effects.ignoreDamageVoid = false;
+      effects.ignoreAttributeDamage.length = 0;
+      effects.time.isMult = false;
+      effects.time.bonus = 0;
+      effects.fixedHp = 0;
+      this.reloadBattleDisplay();
+    };
+    effectsLabel.appendChild(resetEffectsEl);
+    el.appendChild(effectsLabel);
+
+    // this.effects = {
+    //   awakenings: true,
+    //   currentHp: 0,
+    //   skillUsed: true,
+    //   damageMult: 1, // Resist.
+    //   ignoreDamageAbsorb: false,
+    //   ignoreAttributeAbsorb: false,
+    //   ignoreDamageVoid: false,
+    //   ignoreAttributeDamage: [], // 100% damage resist.
+    //   time: {
+    //     isMult: false,
+    //     bonus: 0,
+    //   },
+    //   fixedHp: 0,
+    // };
+
+    // Damage Absorb []  Fixed HP [    ]  Awakenings [ ]
+    // Attr Absorb   []  Shield   [    ]  Skill Used [ ]
+    // Damage Void   []  +Combo   [    ]
+    // Awakenings, Shield, +c
+    // Ignore Attr, Ignore Void, Ignore Attr
+    // Fixed HP, Skill Used
+    const playerEffectsEl = document.createElement('table');
+    playerEffectsEl.style.fontSize = 'small';
+    const effectCells = [];
+    let currentRow;
+    for (let i = 0; i < 18; i++) {
+      if (i % 6 == 0) {
+        if (currentRow) {
+          playerEffectsEl.appendChild(currentRow);
+        }
+        currentRow = document.createElement('tr');
+      }
+      const cell = document.createElement('td');
+      currentRow.appendChild(cell);
+      effectCells.push(cell);
+    }
+    playerEffectsEl.appendChild(currentRow);
+
+    effectCells[0].innerText = 'Void Damage Abs';
+    const voidDamageAbsorbCheckbox = document.createElement('input');
+    voidDamageAbsorbCheckbox.id = 'idc-player-void-damage-absorb';
+    voidDamageAbsorbCheckbox.type = 'checkbox';
+    voidDamageAbsorbCheckbox.checked = false;
+    voidDamageAbsorbCheckbox.onclick = () => {
+      this.effects.ignoreDamageAbsorb = voidDamageAbsorbCheckbox.checked;
+      this.reloadBattleDisplay();
+    };
+    effectCells[1].appendChild(voidDamageAbsorbCheckbox);
+
+    effectCells[2].innerText = 'Fixed HP';
+    const fixedHpInput = document.createElement('input');
+    fixedHpInput.id = 'idc-player-fixed-hp';
+    fixedHpInput.type = 'number';
+    fixedHpInput.style.width = '100px';
+    fixedHpInput.value = 0;
+    fixedHpInput.onchange = () => {
+      this.effects.fixedHp = Number(fixedHpInput.value);
+      this.reloadBattleDisplay();
+    };
+    effectCells[3].appendChild(fixedHpInput);
+
+    effectCells[4].innerText = 'Awakenings';
+    const awakeningCheckbox = document.createElement('input');
+    awakeningCheckbox.id = 'idc-player-awakenings';
+    awakeningCheckbox.type = 'checkbox';
+    awakeningCheckbox.checked = true;
+    awakeningCheckbox.onclick = () => {
+      this.effects.awakenings = awakeningCheckbox.checked;
+      this.reloadBattleDisplay();
+    };
+    effectCells[5].appendChild(awakeningCheckbox);
+
+    effectCells[6].innerText = 'Void Attribute Abs';
+    const voidAttrAbsorbCheckbox = document.createElement('input');
+    voidAttrAbsorbCheckbox.id = 'idc-player-void-attr-absorb';
+    voidAttrAbsorbCheckbox.type = 'checkbox';
+    voidAttrAbsorbCheckbox.checked = false;
+    voidAttrAbsorbCheckbox.onclick = () => {
+      this.effects.ignoreAttributeAbsorb = voidAttrAbsorbCheckbox.checked;
+      this.reloadBattleDisplay();
+    };
+    effectCells[7].appendChild(voidAttrAbsorbCheckbox);
+
+    effectCells[8].innerText = 'Shield(%)';
+    const shieldInput = document.createElement('input');
+    shieldInput.id = 'idc-player-shield';
+    shieldInput.type = 'number';
+    shieldInput.style.width = '40px';
+    shieldInput.value = 0;
+    shieldInput.onchange = () => {
+      console.warn('Shields not yet handled');
+    };
+    effectCells[9].appendChild(shieldInput);
+
+    effectCells[10].innerText = 'Skill Used';
+    const skillUsedCheckbox = document.createElement('input');
+    skillUsedCheckbox.id = 'idc-player-skill-used';
+    skillUsedCheckbox.type = 'checkbox';
+    skillUsedCheckbox.checked = true;
+    skillUsedCheckbox.onclick = () => {
+      this.effects.skillUsed = skillUsedCheckbox.checked;
+      this.reloadBattleDisplay();
+    };
+    effectCells[11].appendChild(skillUsedCheckbox);
+
+    effectCells[12].innerText = 'Void Damage Void';
+    const voidDamageVoidCheckbox = document.createElement('input');
+    voidDamageVoidCheckbox.id = 'idc-player-void-damage-void';
+    voidDamageVoidCheckbox.type = 'checkbox';
+    voidDamageVoidCheckbox.checked = false;
+    voidDamageVoidCheckbox.onclick = () => {
+      this.effects.ignoreDamageVoid = voidDamageVoidCheckbox.checked;
+      this.reloadBattleDisplay();
+    };
+    effectCells[13].appendChild(voidDamageVoidCheckbox);
+
+    effectCells[14].innerText = '+Combo';
+    const comboInput = document.createElement('input');
+    comboInput.id = 'idc-player-combo';
+    comboInput.type = 'number';
+    comboInput.style.width = '40px';
+    comboInput.value = 0;
+    comboInput.onchange = () => {
+      this.combos.bonusCombosActive = Number(comboInput.value);
+      this.reloadBattleDisplay();
+    };
+    effectCells[15].appendChild(comboInput);
+
+    el.appendChild(playerEffectsEl);
+    //   burst: {
+    //     attrRestrictions: [],
+    //     typeRestrictions: [],
+    //     awakenings: [],
+    //     multiplier: 1,
+    //     awakeningScale: 0, // How much to increase multiplier by for each matched awakening.
+    //   },
+    //   rcvMult: 1,
+    // Burst Attributes, Burst Types, Burst Awakenings
+    // Multiplier, Awakening, Rcv
+    // Burst Attributes Multiplier
+    // Burst Types      Per Awoken
+    // Burst Awakenings Recovery
+
+    const burstLabel = document.createElement('div');
+    const burstTitle = document.createElement('div');
+    burstTitle.innerText = 'Active Burst';
+    burstTitle.style.marginTop = '15px';
+    burstTitle.style.fontSize = 'medium';
+    burstTitle.style.width = '75%';
+    burstTitle.style.display = 'inline-block';
+    burstLabel.appendChild(burstTitle);
+    const resetBurstEl = document.createElement('button');
+    resetBurstEl.innerText = 'Reset'
+    resetBurstEl.onclick = () => {
+      const burst = this.effects.burst;
+      burst.attrRestrictions.length = 0;
+      burst.typeRestrictions.length = 0;
+      burst.awakenings.length = 0;
+      burst.multiplier = 1;
+      burst.awakeningScale = 0;
+      this.effects.rcvMult = 1;
+      this.reloadBattleDisplay();
+    };
+    burstLabel.appendChild(resetBurstEl);
+    el.appendChild(burstLabel);
+
+    const burstCells = [];
+    const burstEl = document.createElement('table');
+    burstEl.style.fontSize = 'small';
+    let burstRow = document.createElement('tr');
+    for (let i = 0; i < 12; i++) {
+      const burstCell = document.createElement('td');
+      burstRow.appendChild(burstCell);
+      burstCells.push(burstCell);
+      if (i % 4 == 3) {
+        burstEl.appendChild(burstRow);
+        burstRow = document.createElement('tr');
+      }
+    }
+
+    burstCells[0].innerText = 'Attributes';
+    const attr1el = document.createElement('select');
+    attr1el.id = 'idc-player-burst-attr1';
+    const attr2el = document.createElement('select');
+    attr2el.id = 'idc-player-burst-attr2';
+    attr1el.onchange = () => {
+      this.effects.burst.attrRestrictions = [attr1el.value, attr2el.value].filter((v) => v >= 0).map(Number);
+      this.reloadBattleDisplay();
+    };
+    attr2el.onchange = () => {
+      this.effects.burst.attrRestrictions = [attr1el.value, attr2el.value].filter((v) => v >= 0).map(Number);
+      this.reloadBattleDisplay();
+    };
+    for (let i = -1; i < 5; i++) {
+      const attr1Option = document.createElement('option');
+      attr1Option.value = i;
+      attr1Option.innerText = i == -1 ? '' : AttributeToName[i];
+      attr1el.appendChild(attr1Option);
+      const attr2Option = document.createElement('option');
+      attr2Option.value = i;
+      attr2Option.innerText = i == -1 ? '' : AttributeToName[i];
+      attr2el.appendChild(attr2Option);
+    }
+    burstCells[1].appendChild(attr1el);
+    burstCells[1].appendChild(document.createElement('br'));
+    burstCells[1].appendChild(attr2el);
+
+    burstCells[2].innerText = 'Multiplier';
+    const burstMultiplierInput = document.createElement('input');
+    burstMultiplierInput.id = 'idc-player-burst-multiplier';
+    burstMultiplierInput.type = 'number';
+    burstMultiplierInput.value = 1;
+    burstMultiplierInput.style.width = '30px';
+    burstMultiplierInput.onchange = () => {
+      this.effects.burst.multiplier = Number(burstMultiplierInput.value);
+      this.reloadBattleDisplay();
+    };
+    burstCells[3].appendChild(burstMultiplierInput);
+
+    burstCells[4].innerText = 'Types';
+    const type1el = document.createElement('select');
+    type1el.id = 'idc-player-burst-type1';
+    const type2el = document.createElement('select');
+    type2el.id = 'idc-player-burst-type2';
+    type1el.onchange = () => {
+      this.effects.burst.typeRestrictions = [type1el.value, type2el.value].filter((v) => v >= 0).map(Number);
+      this.reloadBattleDisplay();
+    };
+    type2el.onchange = () => {
+      this.effects.burst.typeRestrictions = [type1el.value, type2el.value].filter((v) => v >= 0).map(Number);
+      this.reloadBattleDisplay();
+    };
+    for (const i of [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 14, 15]) {
+      const type1Option = document.createElement('option');
+      type1Option.value = i;
+      type1Option.innerText = i == -1 ? '' : TypeToName[i];
+      type1el.appendChild(type1Option);
+      const type2Option = document.createElement('option');
+      type2Option.value = i;
+      type2Option.innerText = i == -1 ? '' : TypeToName[i];
+      type2el.appendChild(type2Option);
+    }
+    burstCells[5].appendChild(type1el);
+    burstCells[5].appendChild(document.createElement('br'));
+    burstCells[5].appendChild(type2el);
+
+    burstCells[6].innerText = 'Per Awoken';
+    const awakeningScaleInput = document.createElement('input');
+    awakeningScaleInput.id = 'idc-player-burst-awakening-scale';
+    awakeningScaleInput.type = 'number';
+    awakeningScaleInput.value = 0;
+    awakeningScaleInput.style.width = '40px';
+    awakeningScaleInput.onchange = () => {
+      this.effects.burst.awakeningScale = Number(awakeningScaleInput.value);
+      this.reloadBattleDisplay();
+    };
+    burstCells[7].appendChild(awakeningScaleInput)
+
+    burstCells[8].innerText = 'Awakenings';
+    const awakening1el = document.createElement('select');
+    awakening1el.id = 'idc-player-burst-awakening1';
+    const awakening2el = document.createElement('select');
+    awakening2el.id = 'idc-player-burst-awakening2';
+    awakening1el.style.width = '120px';
+    awakening2el.style.width = '120px';
+    awakening1el.onchange = () => {
+      this.effects.burst.awakenings = [awakening1el.value, awakening2el.value].filter((v) => v >= 0).map(Number);
+      this.reloadBattleDisplay();
+    };
+    awakening2el.onchange = () => {
+      this.effects.burst.awakenings = [awakening1el.value, awakening2el.value].filter((v) => v >= 0).map(Number);
+      this.reloadBattleDisplay();
+    };
+    for (let i = -1; i < AwakeningToName.length; i++) {
+      if (i == 0) {
+        continue;
+      }
+      const awakening1Option = document.createElement('option');
+      awakening1Option.value = i;
+      awakening1Option.innerText = i == -1 ? '' : AwakeningToName[i];
+      awakening1el.appendChild(awakening1Option);
+      const awakening2Option = document.createElement('option');
+      awakening2Option.value = i;
+      awakening2Option.innerText = i == -1 ? '' : AwakeningToName[i];
+      awakening2el.appendChild(awakening2Option);
+    }
+    burstCells[9].appendChild(awakening1el);
+    burstCells[9].appendChild(document.createElement('br'));
+    burstCells[9].appendChild(awakening2el);
+
+    burstCells[10].innerText = 'RCV Mult';
+    const burstRcvInput = document.createElement('input');
+    burstRcvInput.id = 'idc-player-burst-rcv';
+    burstRcvInput.type = 'number';
+    burstRcvInput.value = 1;
+    burstRcvInput.style.width = '30px';
+    burstRcvInput.onchange = () => {
+      this.effects.rcvMult = Number(burstRcvInput.value);
+      this.reloadBattleDisplay();
+    };
+    burstCells[11].appendChild(burstRcvInput);
+
+    el.appendChild(burstEl);
 
     return el;
   }

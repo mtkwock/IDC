@@ -148,6 +148,13 @@ function pureTimeExtend(params) {
   });
 }
 
+// 33
+function drumSounds(params) {
+  return createLeaderSkill({
+    drumEffect: true,
+  });
+}
+
 // 44
 function atkRcvFromMinHp(params) {
   const [thresh, flag1, flag2, atkRcv100] = params;
@@ -201,12 +208,7 @@ function atkBoostFromMinCombos(params) {
   const [minCombo, atk100] = params;
   return createLeaderSkill({
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-      let totalCombos = 0;
-      for (const c in comboContainer.combos) {
-        totalCombos += comboContainer.combos[c].length;
-      }
-      totalCombos += comboContainer.bonusCombos;
-      return totalCombos >= minCombo ? atk100 / 100 : 1;
+      return comboContainer.comboCount() >= minCombo ? atk100 / 100 : 1;
     },
   });
 }
@@ -255,12 +257,7 @@ function atkBoostFromExactCombos(params) {
 
   return createLeaderSkill({
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-      let totalCombos = 0;
-      for (const c in comboContainer.combos) {
-        totalCombos += comboContainer.combos[c].length;
-      }
-      totalCombos += comboContainer.bonusCombos;
-      return totalCombos == comboRequirement ? atk100 / 100 : 1;
+      return totalCombos == comboContainer.comboCount() ? atk100 / 100 : 1;
     },
   });
 }
@@ -464,7 +461,7 @@ function stackingStatboostsForAttributes(params) {
   const hpA = (hp100a || 100) / 100;
   const atkA = (atk100a || 100) / 100;
   const rcvA = (rcv100a || 100) / 100;
-  let [attr2bit, hp100b, atk100b, rcv100b, ...remaining2] = params;
+  let [attr2bit, hp100b, atk100b, rcv100b, ...remaining2] = remaining;
   const hpB = (hp100b || 100) / 100;
   const atkB = (atk100b || 100) / 100;
   const rcvB = (rcv100b || 100) / 100;
@@ -587,12 +584,7 @@ function atkAndShieldFromMinCombos(params) {
   const [minCombos, atk100, shield] = params;
 
   function didActivate(comboContainer) {
-    let totalCombos = 0;
-    for (const c in comboContainer.combos) {
-      totalCombos += comboContainer.combos[c].length;
-    }
-    totalCombos += comboContainer.bonusCombos;
-    return totalCombos >= minCombos;
+    return comboContainer.comboCount() >= minCombos;
   }
 
   return createLeaderSkill({
@@ -881,7 +873,7 @@ const LEADER_SKILL_GENERATORS = {
   // 29: baseStatFromAttr,
   // 30: hpFromTwoTypes,
   // 31: atkFromTwoTypes,
-  // 33: drumSounds,
+  33: drumSounds,
   // 36: shieldAgainstTwoAttr,
   // 38: shieldFromHp,
   // 39: atkRcvFromSubHp,

@@ -1,5 +1,7 @@
 const baseActiveSkill = Object.freeze({
   description: '[Unknown] ',
+  bindClear: 0,
+  awokenBindClear: 0,
   swap: 0, // Index of sub to swap to lead.
   noSkyfall: false,
   massAttack: false,
@@ -33,9 +35,10 @@ const baseActiveSkill = Object.freeze({
   autoHeal: (idc) => {
     return 0;
   },
-  damageMult: (enemy, team, awakeningsActive, isMultiplayer) => {
-    return 1;
-  },
+  shield: 0,
+  // damageMult: (enemy, team, awakeningsActive, isMultiplayer) => {
+  //   return 1;
+  // },
   enhance: (comboContainer) => {
     return;
   },
@@ -55,6 +58,8 @@ function createActiveSkill(configs) {
 function combineActiveSkills(as1, as2) {
   return {
     description: Array.isArray(as1.description) ? as1.description.concat(as2.description) : [as1.description, as2.description],
+    bindClear: as1.bindClear + as2.bindClear,
+    awokenBindClear: as1.awokenBindClear + as2.awokenBindClear,
     noSkyfall: as1.noSkyfall || as2.noSkyfall,
     massAttack: as1.massAttack || as2.massAttack,
     defenseBreakPercent: as1.defenseBreakPercent || as2.defenseBreakPercent,
@@ -79,9 +84,7 @@ function combineActiveSkills(as1, as2) {
     autoHeal: (...args) => {
       return as1.autoHeal(...args) + as2.autoHeal(...args); 
     },
-    damageMult: (...args) => {
-      return as1.damageMult(...args) * as2.damageMult(...args);
-    },
+    shield: as1.shield + as2.shield,
     enhance: (...args) => {
       as1.enhance(...args);
       as2.enhance(...args);
@@ -156,9 +159,10 @@ function shield(params) {
 
   return createActiveSkill({
     description: `${shieldPercent}% Shield.`,
-    damageMult: () => {
-      return 1 - (shieldPercent / 100);
-    },
+    shield: shieldPercent,
+    // damageMult: () => {
+    //   return 1 - (shieldPercent / 100);
+    // },
   });
 }
 
@@ -203,6 +207,22 @@ function flatHeal(params) {
   });
 }
 
+// 9
+function orbChange(params) {
+  const [fromAttr, toAttr] = params;
+
+  return createActiveSkill({
+    description: `Converts ${AttributeToName[fromAttr]} to ${AttributeToName[toAttr]}.`,
+  });
+}
+
+// 10
+function orbRefresh(params) {
+  return createActiveSkill({
+    description: 'Replaces orbs.',
+  });
+}
+
 // 18
 function delay(params) {
   const [turns] = params;
@@ -219,6 +239,15 @@ function defenseBreak(params) {
   return createActiveSkill({
     description: `${defenseBreakPercent}% Defense Break for ${turns} turn(s).`,
     defenseBreakPercent: defenseBreakPercent,
+  });
+}
+
+// 20
+function orbChangeDouble(params) {
+  const [fromAttr1, toAttr1, fromAttr2, toAttr2] = params;
+
+  return createActiveSkill({
+    description: `Convert ${AttributeToName[fromAttr1]} to ${AttributeToName[toAttr1]}, ${AttributeToName[fromAttr2]} to ${AttributeToName[toAttr2]}`,
   });
 }
 
@@ -377,7 +406,9 @@ function scalingAttackRandomToOneEnemy(params) {
 function fullBoard(params) {
   const attrs = params.slice(0, params.length - 1);
   // console.warn('Full board not implemented!');
-  return copyBaseActive();
+  return copyBaseActive({
+    description: `Changes board to ${attrs.map((attr) => AttributeToName[attr]).join(', ')} orbs.`,
+  });
 }
 
 // 84
@@ -500,6 +531,27 @@ function grudgeStrike(params) {
   });
 }
 
+// 115
+function elementalScalingAttackAndHeal(params) {
+  const [attr, atk100, drain100] = params;
+
+  const as = scalingAttackAndHeal([atk100, drain100]);
+  as.description = as.description.replace('Self-Attribute', AttributeToName[attr]);
+  const oldActive = as.damage;
+  function wrapper(pings) {
+    for (const ping of pings) {
+      ping.attribute = attr;
+    }
+    return pings;
+  }
+
+  as.damage = (...args) => {
+    return wrapper(oldActive(...args));
+  };
+
+  return as;
+}
+
 // 116 and 138, but for actives.
 function multipleActiveSkills(params) {
   let as = getActiveSkillEffects(params[0]);
@@ -526,10 +578,74 @@ function multipleActiveSkills(params) {
   return as;
 }
 
+// 117
+function catchAllCleric(params) {
+  const [bindReduce, rcv100, flatHeal, percentHeal, awokenBindReduce] = params;
+  let parts = [];
+  if (bindReduce || awokenBindReduce) {
+    parts.push(`Clear ${bindReduce ? 'Binds' : ''}${bindReduce && awokenBindReduce ? ' and ' : ''}${awokenBindReduce ? 'Awoken Binds' : ''} by ${((bindReduce || awokenBindReduce) > 99) ? 'ALL' : bindReduce || awokenBindReduce} turn(s).`);
+  }
+
+  if (rcv100) {
+    parts.push(`Heal ${rcv100 / 100}x own RCV.`);
+  }
+
+  if (flatHeal) {
+    parts.push(`Heal ${flatHeal} HP.`);
+  }
+
+  if (percentHeal) {
+    parts.push(`Heal ${percentHeal}% HP.`);
+  }
+
+  return createActiveSkill({
+    description: parts.join(' '),
+    heal: (monster, idc) => {
+      let healing = 0;
+      if (flatHeal) {
+        healing += flatHeal;
+      }
+      if (rcv100) {
+        healing += monster.getRcv(idc.isMultiplayer(), idc.effects.awakenings) * rcv100 / 100;
+      }
+      if (percentHeal) {
+        healing += idc.getHp() * percentHeal / 100;
+      }
+      return healing;
+    },
+    bindClear: bindReduce || 0,
+    awokenBindClear: awokenBindReduce || 0,
+  });
+}
+
 // 127 - Column maker
 function orbChangeColumn(params) {
-  console.warn('Orb change not implemented');
-  return copyBaseActive();
+  // 0-3 left
+  // 4-6 from right.
+  const colToColor = [-1, -1, -1, -1, -1];
+  for (let i = 0; i + 1 < params.length; i += 2) {
+    for (const coldIdx of idxsFromBits(params[i])) {
+      const attrs = idxsFromBits(params[i + 1]);
+      if (attrs.length > 1) {
+        console.warn('Unhandled multiple colors in a single column');
+      }
+      colToColor[i] = attrs[0];
+    }
+  }
+  columnNames = ['Leftmost', '2nd', '3rd', '3rd from Right', '2nd from Right', 'Rightmost'];
+  const des = colToColor.map((attr, idx) => `${columnNames[idx]} to ${AttributeToName[attr]}`).filter((s) => !s.includes('Fixed')).join(', ');
+  return createActiveSkill({
+    description: `Change ${des}`,
+  });
+}
+
+// 142
+function selfAttributeChange(params) {
+  const [turnCount, attr] = params;
+  return createActiveSkill({
+    description: `Change own attribute to ${AttributeToName[attr]}`,
+    selfAttribute: attr,
+  });
 }
 
 // 144
@@ -574,10 +690,20 @@ function haste(params) {
   });
 }
 
+// 153
+function enemyAttributeChange(params) {
+  const [attr, UNKOWN] = params;
+
+  return createActiveSkill({
+    description: `Change enemy attribute to ${AttributeToName[attr]}`,
+    enemyAttribute: attr,
+  });
+}
+
 // 156
 function effectFromAwakeningCount(params) {
   const [turnCount, awakening1, awakening2, awakening3, effectFlag, mult100] = params;
-  const awakenings = [awakening1, awakening2, awakening3].filter((a) = !!a);
+  const awakenings = [awakening1, awakening2, awakening3].filter((a) => !!a);
   const filterSet = new Set(awakenings);
   const active = copyBaseActive();
   let factor = 0;
@@ -597,10 +723,10 @@ function effectFromAwakeningCount(params) {
       return countAwakenings(idc.getActiveTeam(), idc.isMultiplayer()) * mult100;
     };
   } else if (effectFlag == 2) {
-    active.description = `${mult100 / 100}x Burst per ${awakenings.map((awk) => AwakeningToName[awk])} Awakening.`;
+    active.description = `${(mult100 - 100) / 100}x Burst per ${awakenings.map((awk) => AwakeningToName[awk])} Awakening.`;
     active.burst = {
-      awakenings: [awakenings],
-      awakeningScale: mult100 / 100,
+      awakenings: awakenings,
+      awakeningScale: (mult100 - 100) / 100,
     };
   } else if (effectFlag == 3) {
     active.description = `${mult100}% Shield per ${awakenings.map((awk) => AwakeningToName[awk])} Awakening.`;
@@ -631,6 +757,20 @@ function addCombos(params) {
   });
 }
 
+function voidAbsorb(params) {
+  const [turnCount, includeAttribute, UNKNOWN, includeDamage] = params;
+
+  if (UNKNOWN) {
+    console.warn(`Param 2 is ${UNKNOWN}, expected to be False.`);
+  }
+
+  return createActiveSkill({
+    description: `Void ${includeAttribute ? 'Attribute Absorb' : ''}${includeAttribute && includeDamage ? ' and ' : ''}${includeDamage ? 'Damage Absorb' : ''} for ${turnCount} turn(s).`,
+    ignoreAttributeAbsorb: Boolean(includeAttribute),
+    ignoreDamageAbsorb: Boolean(includeDamage),
+  });
+}
+
 // 161
 function trueGravity(params) {
   const [percent] = params;
@@ -645,6 +785,16 @@ function trueGravity(params) {
       ping.amount = Math.ceil(enemy.maxHp * percent / 100);
       return [ping];
     },
+  });
+}
+
+// 191
+function voidDamageVoid(params) {
+  const [turnCount] = params;
+
+  return createActiveSkill({
+    description: `Void Damage Void for ${turnCount} turn(s).`,
+    ignoreVoid: true,
   });
 }
 
@@ -667,11 +817,11 @@ const ACTIVE_SKILL_GENERATORS = {
   5: changeTheWorld,
   6: gravity,
   8: flatHeal,
-  // 9: orbChange,
-  // 10: orbRefresh,
+  9: orbChange,
+  10: orbRefresh,
   18: delay,
   19: defenseBreak,
-  // 20: orbChangeDouble,
+  20: orbChangeDouble,
   // 21: attrDamageShield,
   35: scalingAttackAndHeal,
   37: scalingAttackToOneEnemy,
@@ -695,9 +845,9 @@ const ACTIVE_SKILL_GENERATORS = {
   92: burstForTwoTypes,
   // 93: leaderSwap,
   110: grudgeStrike,
-  // 115: elementalScalingAttackAndHeal,
+  115: elementalScalingAttackAndHeal,
   116: multipleActiveSkills,
-  // 117: catchAllCleric,
+  117: catchAllCleric,
   // 118: randomActive,
   // 126: increaseSkyfall,
   // 127: orbChangeColumn,
@@ -706,26 +856,26 @@ const ACTIVE_SKILL_GENERATORS = {
   138: multipleActiveSkills,
   // 140: enhanceOrbsMany,
   // 141: randomOrbSpawn,
-  // 142: selfAttributeChange,
+  142: selfAttributeChange,
   // 143: scalingAttackFromTeamHp, // This doesn't exist in NA.
   144: scalingAttackFromTeam,
   // 145: scalingRecoveryFromTeam,
   146: haste,
   // 152: lockOrbs,
-  // 153: enemyAttributeChange,
+  153: enemyAttributeChange,
   // 154: multiOrbChange,
   156: effectFromAwakeningCount,
   160: addCombos,
   161: trueGravity,
   // 172: unlockOrbs,
-  // 173: voidAbsorb,
+  173: voidAbsorb,
   // 176: orbSpawnPattern,
   // 179: healOverTime,
   // 180: increasedEnhancedOrbChance,
   // 184: noSkyfallActive,
   188: fixedDamageToOneEnemy, // This is the same as 55? Perhaps this runs faster?
   // 189: cheaterActiveLol, // Lkali + path trace.
-  // 191: voidDamageVoid,
+  191: voidDamageVoid,
   195: pureSuicide,
   // 196: reduceUnmatchable,
 };
