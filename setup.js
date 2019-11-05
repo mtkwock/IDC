@@ -209,3 +209,60 @@ const Round = {
   NONE: (a) => a,
 };
 
+function isAttribute(monster, attr) {
+  return monster.getCard().attribute == attr || monster.getCard().subattribute == attr;
+}
+
+function anyAttributes(monster, attrs) {
+  return attrs.some((attr) => isAttribute(monster, attr));
+}
+
+function isType(monster, type) {
+  return monster.getCard().types.includes(type);
+}
+
+function anyTypes(monster, types) {
+  return types.some((type) => isType(monster, type));
+}
+
+const Shape = {
+  AMORPHOUS: 0,
+  L: 1,
+  COLUMN: 2,
+  CROSS: 3,
+  BOX: 4,
+  ROW: 5,
+};
+
+const LetterToShape = {
+  A: Shape.AMORPHOUS,
+  L: Shape.L,
+  C: Shape.COLUMN,
+  X: Shape.CROSS,
+  B: Shape.BOX,
+  R: Shape.ROW,
+}
+
+const ShapeToLetter = {
+  0: 'A',
+  1: 'L',
+  2: 'C',
+  3: 'X',
+  4: 'B',
+  5: 'R',
+};
+
+const LetterToAttributeName = {
+  'r': 'Fire',
+  'b': 'Water',
+  'g': 'Wood',
+  'l': 'Light',
+  'd': 'Dark',
+  'h': 'Heart',
+  'p': 'Poison',
+  'j': 'Jammer',
+  'm': 'Mortal Poison',
+  'o': 'Bomb',
+  '?': "None",
+};
+

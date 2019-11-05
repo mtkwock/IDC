@@ -1358,9 +1358,9 @@ class EnemyInstance {
     this.statusShield = false;
     this.shieldPercent = 0; // Damage is multiplied by (100 - shieldPercent) / 100
     this.attributeAbsorb = []; // Each attribute absorbed.
-    this.comboAbsorb = -1;
-    this.damageAbsorb = -1;
-    this.damageVoid = -1;
+    this.comboAbsorb = 0;
+    this.damageAbsorb = 0;
+    this.damageVoid = 0;
     this.attackMultiplier = 1; // Enrage
     this.turnsRemaining = 1; // Not to be used yet.
     this.turnCounterOverride = -1; // Not to be used yet.
@@ -1437,7 +1437,7 @@ class EnemyInstance {
     }
 
     // Void
-    if (this.damageVoid > 0
+    if (this.damageVoid
         && currentDamage > this.damageVoid
         && !voids.damageVoid
         && (!(COLORS[ping.attribute] in comboContainer.combos) ||
@@ -1447,8 +1447,8 @@ class EnemyInstance {
 
     // Absorbs
     if (this.attributeAbsorb.includes(ping.attribute) && !voids.attributeAbsorb ||
-        this.damageAbsorb > 0 && currentDamage >= this.damageAbsorb && !voids.damageAbsorb ||
-        this.comboAbsorb > 0 && comboContainer.comboCount() <= this.comboAbsorb && !ping.isActive) {
+        this.damageAbsorb && currentDamage >= this.damageAbsorb && !voids.damageAbsorb ||
+        this.comboAbsorb && comboContainer.comboCount() <= this.comboAbsorb && !ping.isActive) {
       currentDamage *= -1;
     }
 
@@ -1476,9 +1476,9 @@ class EnemyInstance {
     this.statusShield = false;
     this.shieldPercent = 0;
     this.attributeAbsorb.length = 0;
-    this.comboAbsorb = -1;
-    this.damageAbsorb = -1;
-    this.damageVoid = -1;
+    this.comboAbsorb = 0;
+    this.damageAbsorb = 0;
+    this.damageVoid = 0;
     this.attackMultiplier = 1;
     this.turnsRemaining = this.turnCounter;
     this.turnCounterOverride = -1;
@@ -5712,7 +5712,6 @@ class Idc {
     }
 
     this.effects.currentHp += healing;
-    // TODO: Handle poisons.
 
     if (this.effects.currentHp > this.getHp()) {
       this.effects.currentHp = this.getHp();
@@ -5728,7 +5727,7 @@ class Idc {
       if (card && (card.activeSkillId in vm.model.playerSkills)) {
         const active = getActiveSkillEffects(card.activeSkillId);
 
-        console.log(active);
+        // console.log(active);
 
         // Handle suicide
         if (active.suicideTo != 100) {
@@ -5771,11 +5770,21 @@ class Idc {
           this.combos.bonusCombosActive = active.plusCombo;
         }
 
+        // Handle Poison
+
         // Handle Swap (lmao)
 
         // Handle healing from damage
 
         // Handle attribute/damage/void void
+        if (active.ignoreDamageAbsorb || active.ignoreAttributeAbsorb) {
+          this.effects.ignoreDamageAbsorb = Boolean(active.ignoreDamageAbsorb);
+          this.effects.ignoreAttributeAbsorb = Boolean(active.ignoreAttributeAbsorb);
+        }
+
+        if (active.ignoreVoid) {
+          this.effects.ignoreDamageVoid = true;
+        }
       }
       this.effects.skillUsed = true;
       this.action = 0;

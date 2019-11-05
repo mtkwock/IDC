@@ -2,7 +2,9 @@ const baseLeaderSkill = Object.freeze({
   // Boolean values
   bigBoard: false,
   noSkyfall:  false,
+  ignorePoison: false,
   minOrbMatch: 3,
+  resolve: 101,
   // Don Chan/Soprano's Drumming.
   drumEffect: false,
   // If nonzero, overrides all other time.
@@ -38,7 +40,7 @@ const baseLeaderSkill = Object.freeze({
   plusCombo: (team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
     return 0;
   },
-  heal: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
+  heal: (rcv) => {
     return 0;
   },
   // True pings are all in the same value.
@@ -70,11 +72,14 @@ function combineLeaderSkills(ls1, ls2) {
     // Boolean values
     bigBoard: ls1.bigBoard || ls2.bigBoard,
     noSkyfall: ls1.noSkyfall || ls2.noSkyfall,
+    ignorePoison: ls1.ignorePoison || ls2.ignorePoison,
     minOrbMatch: Math.max(ls1.minOrbMatch, ls2.minOrbMatch),
+    resolve: Math.min(ls1.resolve, ls2.resolve),
     // Don Chan/Soprano's Drumming.
     drumEffect: ls1.drumEffect || ls2.drumEffect,
     // If nonzero, overrides all other time.
     fixedTime: (ls1.fixedTime && ls2.fixedTime) ? Math.min(ls1.fixedTime, ls2.fixedTime) : ls1.fixedTime || ls2.fixedTime,
+    timeExtend: ls1.timeExtend + ls2.timeExtend,
     // Multiplicative values
     hp: (...args) => {
       return ls1.hp(...args) * ls2.hp(...args);
@@ -103,7 +108,6 @@ function combineLeaderSkills(ls1, ls2) {
     plusCombo: (...args) => {
       return ls1.plusCombo(...args) + ls2.plusCombo(...args);
     },
-    timeExtend: ls1.timeExtend + ls2.timeExtend,
     heal: (...args) => {
       return ls1.heal(...args) + ls2.heal(...args);
     },
@@ -129,6 +133,17 @@ function combineLeaderSkills(ls1, ls2) {
 //   [4, 1 << 4],  // Dark
 // ];
 
+// 11
+function atkFromAttribute(params) {
+  const [attr, atk100] = params;
+
+  return createLeaderSkill({
+    atk: (monster) => {
+      return isAttribute(monster, attr) ? atk100 / 100 : 1;
+    },
+  });
+}
+
 // 12
 function bonusAttackScale(params) {
   const scale = params[0] / 100;
@@ -140,6 +155,23 @@ function bonusAttackScale(params) {
   });
 }
 
+// 13
+function autoheal(params) {
+  const [heal100] = params;
+
+  return createLeaderSkill({
+    heal: (rcv) => (rcv * heal100 / 100),
+  });
+}
+
+// 14
+function resolve(params) {
+  const [resolveMinPercent, UNKNOWN] = params;
+  return createLeaderSkill({
+    resolve: resolveMinPercent,
+  });
+}
+
 // 15
 function pureTimeExtend(params) {
   const [centiSeconds] = params;
@@ -148,10 +180,111 @@ function pureTimeExtend(params) {
   });
 }
 
+// 16
+function shieldAgainstAll(params) {
+  const [shield100] = params;
+  return createLeaderSkill({
+    damageMult: () => (1 - shield100 / 100),
+  });
+}
+
+// 17
+function shieldAgainstAttr(params) {
+  const [attr, shield100] = params;
+  return createLeaderSkill({
+    damageMult: (enemy) => (enemy.getAttribute() == attr ? (1 - shield100 / 100) : 1),
+  });
+}
+
+// 22
+function atkFromType(params) {
+  const [type, atk100] = params;
+  return createLeaderSkill({
+    atk: (ping) => (isType(ping.source, type) ? atk100 / 100 : 1),
+  });
+}
+
+// 23
+function hpFromType(params) {
+  const [type, hp100] = params;
+  return createLeaderSkill({
+    hp: (monster) => (isType(monster, type) ? hp100 / 100 : 1),
+  });
+}
+
+// 24
+function rcvFromType(params) {
+  const [type, rcv100] = params;
+  return createLeaderSkill({
+    rcv: (monster) => (isType(monster, type) ? rcv100 / 100 : 1),
+  });
+}
+
+// 28
+function atkRcvFromAttr(params) {
+  const [attr, mult100] = params;
+  return createLeaderSkill({
+    atk: (ping) => (isAttribute(ping.source, attr) ? mult100 / 100 : 1),
+    rcv: (monster) => (isAttribute(monster) ? mult100 / 100 : 1),
+  });
+}
+
+// 29
+function baseStatFromAttr(params) {
+  const [attr, mult100] = params;
+  return createLeaderSkill({
+    hp: (monster) => (isAttribute(monster, attr) ? mult100 / 100 : 1),
+    atk: (ping) => (isAttribute(ping.source, attr) ? mult100 / 100 : 1),
+    rcv: (monster) => (isAttribute(monster, attr) ? mult100 / 100 : 1),
+  })
+}
+
+// 30
+function hpFromTwoTypes(params) {
+  const [type1, type2, hp100] = params;
+
+  return createLeaderSkill({
+    hp: (monster) => anyTypes(monster, [type1, type2]) ? hp100 / 100 : 1,
+  });
+}
+
+// 31
+function atkFromTwoTypes(params) {
+  const [type1, type2, atk100] = params;
+
+  return createLeaderSkill({
+    atk: (ping) => anyTypes(ping.source, [type1, type2]) ? atk100 / 100 : 1,
+  });
+}
+
 // 33
 function drumSounds(params) {
   return createLeaderSkill({
     drumEffect: true,
+  });
+}
+
+// 36
+function shieldAgainstTwoAttr(params) {
+  const [attr1, attr2, shield100] = params;
+
+  return createLeaderSkill({
+    damageMult: (enemy) => [attr1, attr2].includes(enemy.getAttribute()) ? 1 - shield100 / 100 : 1,
+  });
+}
+
+// 38
+function shieldFromHp(params) {
+  const [threshold, UNKNOWN, shield100] = params;
+
+  return createLeaderSkill({
+    damageMult: (enemy, team, percentHp) => {
+      const mult = 1 - shield100 / 100;
+      if (threshold == 100) {
+        return percentHp >= 100 ? mult : 1;
+      }
+      return percentHp <= threshold ? mult : 1;
+    },
   });
 }
 
@@ -380,10 +513,11 @@ function baseStatFromAttributeType(params) {
   const attrsResisted = idxsFromBits(attrResistBits);
 
   const monsterMatchesAttributeOrType = (monster) => {
-    const monsterAttributes = [monster.getCard().attribute, monster.getCard().subattribute];
-    const hasAttribute = monsterAttributes.some((attribute) => appliedAttributes.has(attribute));
-    const hasType = monster.getCard().types.some((type) => appliedTypes.has(type));
-    return hasAttribute || hasType;
+    return anyAttributes(monster, appliedAttributes) || anyTypes(monster, appliedTypes);
+    // const monsterAttributes = [monster.getCard().attribute, monster.getCard().subattribute];
+    // const hasAttribute = monsterAttributes.some((attribute) => appliedAttributes.has(attribute));
+    // const hasType = monster.getCard().types.some((type) => appliedTypes.has(type));
+    // return hasAttribute || hasType;
   }
 
   return createLeaderSkill({
@@ -495,6 +629,49 @@ function stackingStatboostsForAttributes(params) {
       return getMultiplier(monster, rcvA, rcvB);
     },
   })
+}
+
+// 150
+function fiveOrbsOneEnhance(params) {
+  const [UNKNOWN, atk100] = params;
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer) => {
+      return comboContainer.combos[COLORS[ping.attribute]].some(
+          (combo) => combo.count == 5 && combo.enhanced > 0) ? atk100 / 100 : 1;
+    },
+  });
+}
+
+// 151
+function atkRcvShieldFromHeartCross(params) {
+  const [atk100, maybeRcv100, shield100] = params;
+
+  if (maybeRcv100) {
+    console.error('Second argument of Heart Cross params set. Maybe Recovery? ' + String(maybeRcv100));
+  }
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer) => {
+      if (!atk100) {
+        return 1;
+      }
+
+      if (comboContainer.combos['h'].some((combo) => combo.shape == Shape.CROSS)) {
+        return atk100 / 100;
+      }
+      return 1;
+    },
+    damageMult: (enemy, team, percentHp, comboContainer) => {
+      if (!shield100) {
+        return 1;
+      }
+      if (comboContainer.combos['h'].some((combo) => combo.shape == Shape.CROSS)) {
+        return 1 - shield100 / 100;
+      }
+      return 1;
+    },
+  });
 }
 
 // 155
@@ -810,6 +987,38 @@ function atkAndCombosFromLinkedOrbs(params) {
   });
 }
 
+// 193
+function atkRcvShieldFromLMatch(params) {
+  const [attrBits, atk100, maybeRcv100, shield100] = params;
+
+  const attrs = idxsFromBits(attrBits);
+
+  if (maybeRcv100) {
+    console.error('Unhandled argument 3 of L match: ' + String(maybeRcv100));
+  }
+
+  function madeL(comboContainer) {
+    return attrs.some((attr) => {
+      return comboContainer[COLORS[attr]].some((combo) => combo.shape == Shape.L);
+    });
+  }
+
+  return createLeaderSkill({
+    atk: (ping, team, percentHp, comboContainer) => {
+      if (atk100 && madeL(comboContainer)) {
+        return atk100 / 100;
+      }
+      return 1;
+    },
+    damageMult: (enemy, team, percentHp, comboContainer) => {
+      if (shield100 && madeL(comboContainer)) {
+        return 1 - shield100 / 100;
+      }
+      return 1;
+    },
+  });
+}
+
 // 194
 function atkAndCombosFromRainbow(params) {
   const [attrBits, minColors, atk100, comboBonus] = params;
@@ -837,6 +1046,26 @@ function atkAndCombosFromRainbow(params) {
   });
 }
 
+// 197
+function disablePoisonDamage(params) {
+  return createLeaderSkill({
+    ignorePoison: true,
+  });
+}
+
+// 199
+function trueBonusFromColorMatches(params) {
+  const [attrBits, minCount, damage] = params;
+
+  const attrs = idxsFromBits(attrBits);
+
+  return createLeaderSkill({
+    trueBonusAttack: (monster, team, percentHp, comboContainer) => {
+      return attrs.filter((attr) => comboContainer[COLORS[attr]].length > 0).length >= minCount ? damage : 0;
+    },
+  });
+}
+
 // 200
 function trueBonusFromLinkedOrbs(params) {
   const [attrBits, minLinked, damage] = params;
@@ -858,24 +1087,24 @@ function trueBonusFromLinkedOrbs(params) {
 }
 
 const LEADER_SKILL_GENERATORS = {
-  // 11: atkFromAttribute,
+  11: atkFromAttribute,
   12: bonusAttackScale,
-  // 13: autoheal,
-  // 14: resolve,
+  13: autoheal,
+  14: resolve,
   15: pureTimeExtend,
-  // 16: shieldAgainstAll,
-  // 17: shieldAgainstAttr,
-  // 22: atkFromType,
-  // 23: hpFromType,
-  // 24: rcvFromType,
+  16: shieldAgainstAll,
+  17: shieldAgainstAttr,
+  22: atkFromType,
+  23: hpFromType,
+  24: rcvFromType,
   // 26: atkUnconditional, // Unused for any real monsters.
-  // 28: atkRcvFromAttr,
-  // 29: baseStatFromAttr,
-  // 30: hpFromTwoTypes,
-  // 31: atkFromTwoTypes,
+  28: atkRcvFromAttr,
+  29: baseStatFromAttr,
+  30: hpFromTwoTypes,
+  31: atkFromTwoTypes,
   33: drumSounds,
-  // 36: shieldAgainstTwoAttr,
-  // 38: shieldFromHp,
+  36: shieldAgainstTwoAttr,
+  38: shieldFromHp,
   // 39: atkRcvFromSubHp,
   // 40: atkFromTwoAttr,
   // 41: counterattack,
@@ -933,8 +1162,8 @@ const LEADER_SKILL_GENERATORS = {
   // 139: atkFromAttrTypeHpAboveBelow,
   // 148: expMultiplier,
   // 149: rcvFromHpa,
-  // 150: fiveOrbsOneEnhance,
-  // 151: heartCross,
+  150: fiveOrbsOneEnhance,
+  151: atkRcvShieldFromHeartCross,
   155: statBoostFromMultiplayer,
   // 157: atkScalingFromCrossColors,
   // 158: baseStatFromAttrTypeMinMatch,
@@ -956,11 +1185,11 @@ const LEADER_SKILL_GENERATORS = {
   185: moveTimeAndBaseStatFromAttributeType,
   186: bigBoardAndBaseStatFromAttributeType,
   192: atkAndCombosFromLinkedOrbs,
-  // 193: atkRcvShieldFromLMatch,
+  193: atkRcvShieldFromLMatch,
   194: atkAndCombosFromRainbow,
-  // 197: disablePoisonDamage,
+  197: disablePoisonDamage,
   // 198: atkShieldAwokenClearFromRcv,
-  // 199: trueBonusFromColorMatches,
+  199: trueBonusFromColorMatches,
   200: trueBonusFromLinkedOrbs,
 };
 
