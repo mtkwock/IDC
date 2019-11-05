@@ -788,6 +788,13 @@ function trueGravity(params) {
   });
 }
 
+// 184
+function noSkyfallActive(params) {
+  return createActiveSkill({
+    noSkyfall: true,
+  });
+}
+
 // 191
 function voidDamageVoid(params) {
   const [turnCount] = params;
@@ -872,7 +879,7 @@ const ACTIVE_SKILL_GENERATORS = {
   // 176: orbSpawnPattern,
   // 179: healOverTime,
   // 180: increasedEnhancedOrbChance,
-  // 184: noSkyfallActive,
+  184: noSkyfallActive,
   188: fixedDamageToOneEnemy, // This is the same as 55? Perhaps this runs faster?
   // 189: cheaterActiveLol, // Lkali + path trace.
   191: voidDamageVoid,

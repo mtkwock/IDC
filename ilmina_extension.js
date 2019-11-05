@@ -2889,47 +2889,6 @@ function getAwakeningOffsets(awakeningNumber) {
   return result;
 }
 
-const Shape = {
-  AMORPHOUS: 0,
-  L: 1,
-  COLUMN: 2,
-  CROSS: 3,
-  BOX: 4,
-  ROW: 5,
-};
-
-const LetterToShape = {
-  A: Shape.AMORPHOUS,
-  L: Shape.L,
-  C: Shape.COLUMN,
-  X: Shape.CROSS,
-  B: Shape.BOX,
-  R: Shape.ROW,
-}
-
-const ShapeToLetter = {
-  0: 'A',
-  1: 'L',
-  2: 'C',
-  3: 'X',
-  4: 'B',
-  5: 'R',
-};
-
-const LetterToAttributeName = {
-  'r': 'Fire',
-  'b': 'Water',
-  'g': 'Wood',
-  'l': 'Light',
-  'd': 'Dark',
-  'h': 'Heart',
-  'p': 'Poison',
-  'j': 'Jammer',
-  'm': 'Mortal Poison',
-  'o': 'Bomb',
-  '?': "None",
-};
-
 class Combo {
   constructor(count, attribute, enhanced = 0, shape = Shape.AMORPHOUS) {
     this.count = count;
@@ -4005,9 +3964,9 @@ class Idc {
 
   getHpPercent() {
     if (this.getHp() == 0) {
-      return 100;
+      return 0;
     }
-    return Math.ceil(100 * this.effects.currentHp / this.getHp());
+    return Math.round(100 * this.effects.currentHp / this.getHp());
   }
 
   toJson() {
@@ -4418,14 +4377,15 @@ class Idc {
       }
     }
 
-    healing += countAwakenings(IdcAwakening.AUTOHEAL) * 1000;
-
-    const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.effects.skillUsed, MP);
+    const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.effects.skillUsed, MP, healing);
     // Apply leader skills.
     for (const ping of pings) {
       const multiplier = partialLead(lead, ping) * partialLead(helper, ping);
       ping.multiply(multiplier, Round.NEAREST);
     }
+
+    healing += countAwakenings(IdcAwakening.AUTOHEAL) * 1000;
+    // TODO: add auto recover leader skill and heal over time.
 
     trueBonusAttack += lead.trueBonusAttack(monsters[0], monsters, percent, this.combos, this.effects.skillUsed, MP);
     trueBonusAttack += helper.trueBonusAttack(monsters[0], monsters, percent, this.combos, this.effects.skillUsed, MP);
