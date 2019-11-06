@@ -1169,7 +1169,6 @@ function bigBoardLeader(params) {
 
 // 163 - Exactly the same as baseStatFromAttributeType except added nosf
 function noSkyfallAndBaseStatFromAttributeType(params) {
-  // const [attrBits, typeBits, hp100, atk100, rcv100, ...remainder] = params;
   const leaderSkill = baseStatFromAttributeType(params);
   leaderSkill.noSkyfall = true;
   return leaderSkill;
@@ -1216,7 +1215,7 @@ function atkRcvScalingFromOneColorMatches(params) {
       teamAttrs.add(monster.getAttribute());
       teamAttrs.add(monster.getSubattribute());
     }
-    const c = attrs.filter((attr) => comboContainer[COLORS[attr]].length > 0).filter((attr) => teamAttrs.has(attr)).length;
+    const c = attrs.filter((attr) => comboContainer.combos[COLORS[attr]].length > 0).filter((attr) => teamAttrs.has(attr)).length;
     if (c > maxColors) {
       c = maxColors;
     }
@@ -1682,6 +1681,7 @@ function trueBonusFromLinkedOrbs(params) {
 }
 
 const LEADER_SKILL_GENERATORS = {
+  0: copyBaseLeader,
   11: atkFromAttribute,
   12: bonusAttackScale,
   13: autoheal,
