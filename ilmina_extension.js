@@ -4280,7 +4280,7 @@ class Idc {
       for (const monster of monsters) {
         let rcv = monster.getRcv();
         if (combo.count == 4) {
-          rcv *= (1.5 ** monster.countAwakening(Idc.OE_HEART, MP));
+          rcv *= (1.5 ** monster.countAwakening(IdcAwakening.OE_HEART, MP));
         }
         if (combo.shape == Shape.COLUMN &&
             monster.countAwakening(IdcAwakening.BONUS_ATTACK, MP)) {
