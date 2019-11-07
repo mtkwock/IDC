@@ -4199,7 +4199,9 @@ class Idc {
         // Handle enhances.
         if (combo.enhanced) {
           baseMultiplier *= (1 + 0.06 * combo.enhanced);
-          baseMultiplier *= (1 + enhancedCounts[c] * 0.07);
+          if (this.effects.awakenings) {
+            baseMultiplier *= (1 + enhancedCounts[c] * 0.07);
+          }
         }
         // Handle Row
         if (combo.shape == Shape.ROW) {
@@ -4210,18 +4212,20 @@ class Idc {
             continue;
           }
           let multiplier = baseMultiplier;
-          // Handle TPA
-          if (combo.count == 4) {
-            multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.TPA, MP));
-          }
-          // Handle L
-          if (combo.shape == Shape.L) {
-            multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.L_UNLOCK, MP));
-          }
-          // Handle VDP
-          if (combo.shape == Shape.BOX) {
-            multiplier *= (2.5 ** ping.source.countAwakening(IdcAwakening.VDP, MP));
-            ping.vdp = true;
+          if (this.effects.awakenings) {
+            // Handle TPA
+            if (combo.count == 4) {
+              multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.TPA, MP));
+            }
+            // Handle L
+            if (combo.shape == Shape.L) {
+              multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.L_UNLOCK, MP));
+            }
+            // Handle VDP
+            if (combo.shape == Shape.BOX) {
+              multiplier *= (2.5 ** ping.source.countAwakening(IdcAwakening.VDP, MP));
+              ping.vdp = true;
+            } 
           }
 
           // Handle burst.
@@ -4272,7 +4276,9 @@ class Idc {
       let multiplier = (combo.count + 1) * 0.25;
       if (combo.enhanced) {
         multiplier *= (1 + 0.06 * combo.enhanced);
-        multiplier *= (1 + enhancedCounts.h * 0.07);          
+        if (this.effects.awakenings) {
+          multiplier *= (1 + enhancedCounts.h * 0.07);
+        }
       }
       multiplier *= this.effects.rcvMult;
       for (const monster of monsters) {
