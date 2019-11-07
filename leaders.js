@@ -609,7 +609,7 @@ function atkBoostFromExactCombos(params) {
 
   return createLeaderSkill({
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-      return totalCombos == comboContainer.comboCount() ? atk100 / 100 : 1;
+      return comboRequirement == comboContainer.comboCount() ? atk100 / 100 : 1;
     },
   });
 }

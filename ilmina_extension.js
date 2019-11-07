@@ -4031,8 +4031,14 @@ class Idc {
     const monsters = this.getActiveTeam();
     const lead = getLeaderSkillEffects(monsters[0].getCard().leaderSkillId).hp;
     const helper = getLeaderSkillEffects(monsters[5].getCard().leaderSkillId).hp;
+    if (this.playerMode == 2) {
+      const p2Monsters = this.getTeamAt(this.activeTeamIdx ^ 1);
+      for (let i = 1; i < 5; i++) {
+        monsters.push(p2Monsters[i]);
+      }
+    }
     let totalHp = 0;
-    let teamHpAwakenings = 0;
+    const teamHpAwakeningsMult = 1 + this.effects.awakenings ? (monsters.reduce((total, monster) => total + monster.countAwakening(IdcAwakening.TEAM_HP), 0) * 0.05) : 0;
     for (const monster of monsters) {
       if (!monster.id || monster.id <= 0) {
         continue;
@@ -4041,26 +4047,9 @@ class Idc {
           lead(monster, monsters, this.isMultiplayer()) * 
           helper(monster, monsters, this.isMultiplayer()));
       const hpBase = monster.getHp(this.isMultiplayer(), this.effects.awakenings);
-      totalHp += Math.round(hpBase * hpMult);
-      teamHpAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set([IdcAwakening.TEAM_HP])).length;
+      totalHp += Math.round(hpBase * hpMult * teamHpAwakeningsMult);
     }
-    if (this.playerMode == 2) {
-      const helperMonsters = this.getTeamAt(this.activeTeamIdx ^ 1);
-      // Handle subs
-      for (let i = 1; i < 5; i++) {
-        const monster = helperMonsters[i];
-        if (!monster.id || monster.id <= 0) {
-          continue;
-        }
-        const hpMult = (
-            lead(monster, monsters, this.isMultiplayer()) * 
-            helper(monster, monsters, this.isMultiplayer()));
-        const hpBase = monster.getHp(this.isMultiplayer(), this.effects.awakenings);
-        totalHp += Math.round(hpBase * hpMult);
-        teamHpAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set([IdcAwakening.TEAM_HP])).length;
-      }
-    }
-    return Math.round(totalHp * (1 + 0.05 * teamHpAwakenings));
+    return totalHp;
   }
 
   getRcv() {
@@ -4068,7 +4057,7 @@ class Idc {
     const lead = getLeaderSkillEffects(monsters[0].getCard().leaderSkillId).rcv;
     const helper = getLeaderSkillEffects(monsters[5].getCard().leaderSkillId).rcv;
     let totalRcv = 0;
-    let teamRcvAwakenings = 0;
+    const teamRcvAwakeningsMult = 1 + this.effects.awakenings ? (monsters.reduce((total, monster) => total + monster.countAwakening(IdcAwakening.TEAM_RCV), 0) * 0.1) : 0;
     for (const monster of monsters) {
       if (!monster.id || monster.id <= 0) {
         continue;
@@ -4077,11 +4066,10 @@ class Idc {
           lead(monster, monsters, this.isMultiplayer()) * 
           helper(monster, monsters, this.isMultiplayer()));
       const rcvBase = monster.getRcv(this.isMultiplayer(), this.effects.awakenings);
-      totalRcv += Math.round(rcvBase * rcvMult);
-      teamRcvAwakenings += monster.getAwakenings(this.isMultiplayer(), new Set([IdcAwakening.TEAM_RCV])).length;
+      totalRcv += Math.round(rcvBase * rcvMult * teamRcvAwakeningsMult);
     }
 
-    return Math.round(totalRcv * (1 + 0.1 * teamRcvAwakenings));
+    return totalRcv;
   }
 
   getTime() {
@@ -4154,8 +4142,8 @@ class Idc {
     const helper = monsters[5].bound ? copyBaseLeader() : getLeaderSkillEffects(monsters[5].getCard().leaderSkillId);
     const MP = this.isMultiplayer();
     const percent = this.getHpPercent();
-    function countAwakenings(awakening){
-      return monsters.reduce((total, monster) => total + (monster.bound ? 0 : monster.countAwakening(awakening, MP)), 0);
+    const countAwakenings = (awakening) => {
+      return this.effects.awakenings ? monsters.reduce((total, monster) => total + (monster.bound ? 0 : monster.countAwakening(awakening, MP)), 0) : 0;
     }
 
     const enhancedCounts = {
@@ -4212,13 +4200,6 @@ class Idc {
             continue;
           }
           let multiplier = baseMultiplier;
-          if (ping.isSub) {
-            if (ping.attribute == ping.source.getAttribute()) {
-              multiplier /= 10;
-            } else {
-              multiplier /= 3;
-            }
-          }
           // Handle TPA
           if (combo.count == 4) {
             multiplier *= (1.5 ** ping.source.countAwakening(IdcAwakening.TPA, MP));
@@ -4251,7 +4232,14 @@ class Idc {
             }
           }
 
-          const baseAtk = ping.source.getAtk(MP, this.effects.awakenings);
+          let baseAtk = ping.source.getAtk(MP, this.effects.awakenings);
+          if (ping.isSub) {
+            if (ping.attribute == ping.source.getAttribute()) {
+              baseAtk = Math.ceil(baseAtk / 10);
+            } else {
+              baseAtk = Math.ceil(baseAtk / 3);
+            }
+          }
           // When adding a single match of damage, the value is always rounded up.
           // e.g. A monster with 1atk making a 4-match (1.25x) will do 2 damage.
           ping.add(Math.ceil(baseAtk * multiplier));
@@ -4274,20 +4262,22 @@ class Idc {
       let multiplier = (combo.count + 1) * 0.25;
       if (combo.enhanced) {
         multiplier *= (1 + 0.06 * combo.enhanced);
-        multiplier *= (1 + enhancedCounts.h * 0.07);
+        multiplier *= (1 + enhancedCounts.h * 0.07);          
       }
       multiplier *= this.effects.rcvMult;
       for (const monster of monsters) {
         let rcv = monster.getRcv();
-        if (combo.count == 4) {
-          rcv *= (1.5 ** monster.countAwakening(IdcAwakening.OE_HEART, MP));
-        }
-        if (combo.shape == Shape.COLUMN &&
-            monster.countAwakening(IdcAwakening.BONUS_ATTACK, MP)) {
-          trueBonusAttack += 1;
-        }
-        if (combo.shape == Shape.BOX) {
-          trueBonusAttack += (99 * monster.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER, MP));
+        if (this.effects.awakenings) {
+          if (combo.count == 4) {
+            rcv *= (1.5 ** monster.countAwakening(IdcAwakening.OE_HEART, MP));
+          }
+          if (combo.shape == Shape.COLUMN &&
+              monster.countAwakening(IdcAwakening.BONUS_ATTACK, MP)) {
+            trueBonusAttack += 1;
+          }
+          if (combo.shape == Shape.BOX) {
+            trueBonusAttack += (99 * monster.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER, MP));
+          }
         }
         const rcvMult = (
             partialRcv(lead, monster) *
@@ -4315,73 +4305,78 @@ class Idc {
     // Jammer applies after Sfua.
     // Assuming:
     // (7c/10c), (80%/50%), Rows, Sfua, L-Guard, JammerBless, PoisonBless
+    if (this.effects.awakenings) {
+      // 7c + 10c. Order does not matter since they are both whole number multiplications.
+      for (const ping of pings) {
+        const count = this.combos.comboCount();
+        let multiplier = 1;
+        if (count >= 7) {
+          multiplier *= 2 ** ping.source.countAwakening(IdcAwakening.COMBO_7);
+          if (count >= 10) {
+            multiplier *= 5 ** ping.source.countAwakening(IdcAwakening.COMBO_10);
+          }
+        }
+        ping.multiply(multiplier);
+      }
 
-    // 7c + 10c. Order does not matter since they are both whole number multiplications.
-    for (const ping of pings) {
-      const count = this.combos.comboCount();
-      let multiplier = 1;
-      if (count >= 7) {
-        multiplier *= 2 ** ping.source.countAwakening(IdcAwakening.COMBO_7);
-        if (count >= 10) {
-          multiplier *= 5 ** ping.source.countAwakening(IdcAwakening.COMBO_10);
+      // <=50%, >=80%. Order does not matter since they are mutually exclusive.
+      for (const ping of pings) {
+        const percent = this.getHpPercent();
+        let multiplier = 1;
+        if (percent <= 50) {
+          multiplier *= 2 ** ping.source.countAwakening(IdcAwakening.HP_LESSER);
+        }
+        if (percent >= 80) {
+          multiplier *= 1.5 ** ping.source.countAwakening(IdcAwakening.HP_GREATER);
+        }
+        ping.multiply(multiplier, Round.NEAREST);
+      }
+
+      // Rows
+      for (const ping of pings) {
+        if (rowCounts[ping.attribute]) {
+          ping.multiply(1 + 0.15 * rowCounts[ping.attribute], Round.NEAREST);
         }
       }
-      ping.multiply(multiplier);
-    }
 
-    // <=50%, >=80%. Order does not matter since they are mutually exclusive.
-    for (const ping of pings) {
-      const percent = this.getHpPercent();
-      let multiplier = 1;
-      if (percent <= 50) {
-        multiplier *= 2 ** ping.source.countAwakening(IdcAwakening.HP_LESSER);
+      // SFua
+      if (this.combos.combos['h'].some((combo) => combo.shape == Shape.BOX)) {
+        for (const ping of pings) {
+          ping.multiply(2 ** ping.source.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER));
+        }
       }
-      if (percent >= 80) {
-        multiplier *= 1.5 ** ping.source.countAwakening(IdcAwakening.HP_GREATER);
-      }
-      ping.multiply(multiplier, Round.NEAREST);
-    }
 
-    // Rows
-    for (const ping of pings) {
-      if (rowCounts[ping.attribute]) {
-        ping.multiply(1 + 0.15 * rowCounts[ping.attribute], Round.NEAREST);
+      // L-Guard
+      if (this.combos.combos['h'].some((combo) => combo.shape == Shape.L)) {
+        for (const ping of pings) {
+          ping.multiply(1.5 ** ping.source.countAwakening(IdcAwakening.L_GUARD), Round.NEAREST);
+        }
       }
-    }
 
-    // SFua
-    if (this.combos.combos['h'].some((combo) => combo.shape == Shape.BOX)) {
-      for (const ping of pings) {
-        ping.multiply(2 ** ping.source.countAwakening(IdcAwakening.BONUS_ATTACK_SUPER));
+      // Jammer-Blessing, Poison-Blessing
+      if (this.combos.combos['j'].length) {
+        for (const ping of pings) {
+          ping.multiply(1.5 ** ping.source.countAwakening(IdcAwakening.JAMMER_BOOST), Round.NEAREST);
+        }
       }
-    }
 
-    // L-Guard
-    if (this.combos.combos['h'].some((combo) => combo.shape == Shape.L)) {
-      for (const ping of pings) {
-        ping.multiply(1.5 ** ping.source.countAwakening(IdcAwakening.L_GUARD), Round.NEAREST);
-      }
-    }
-
-    // Jammer-Blessing, Poison-Blessing
-    if (this.combos.combos['j'].length) {
-      for (const ping of pings) {
-        ping.multiply(1.5 ** ping.source.countAwakening(IdcAwakening.JAMMER_BOOST), Round.NEAREST);
-      }
-    }
-
-    // Poison-Blessing
-    if (this.combos.combos['p'].length || this.combos.combos['m'].length) {
-      for (const ping of pings) {
-        ping.multiply(2 ** ping.source.countAwakening(IdcAwakening.POISON_BOOST));
-      }
+      // Poison-Blessing
+      if (this.combos.combos['p'].length || this.combos.combos['m'].length) {
+        for (const ping of pings) {
+          ping.multiply(2 ** ping.source.countAwakening(IdcAwakening.POISON_BOOST));
+        }
+      }      
     }
 
     const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.effects.skillUsed, MP, healing);
     // Apply leader skills.
     for (const ping of pings) {
-      const multiplier = partialLead(lead, ping) * partialLead(helper, ping);
-      ping.multiply(multiplier, Round.NEAREST);
+      let val = ping.amount;
+      val = Math.fround(val) * Math.fround(partialLead(lead, ping) * 100) / Math.fround(100);
+      val = Math.fround(Math.fround(val) * partialLead(helper, ping) * 100) / Math.fround(100);
+      // const multiplier = partialLead(lead, ping) * partialLead(helper, ping) * 10000;
+      ping.amount = Math.round(Math.fround(val));// Math.fround(Math.fround(ping.amount * multiplier) / Math.fround(10000));
+      // ping.multiply(multiplier, Round.NEAREST);
     }
 
     healing += countAwakenings(IdcAwakening.AUTOHEAL) * 1000;
