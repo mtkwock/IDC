@@ -3502,6 +3502,7 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined, filt
     result.push(text);
   }
   let lowerPriority = [];
+  let lowestPriority = [];
   // Search for monsters whose substrings work.
   for (const card of searchArray) {
     if (result.length >= maxResults) {
@@ -3512,12 +3513,21 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined, filt
       continue;
     }
     if (idx == 0 || card.name[idx - 1] == ' ')  {
-      result.push(card.id);
+      if (idx + text.length == card.name.length || card.name[idx + text.length + 1] == ' ') {
+        result.push(card.id);
+      } else {
+        lowerPriority.push(card.id);
+      }
     } else {
-      lowerPriority.push(card.id);
+      lowestPriority.push(card.id);
     }
   }
   for (const id of lowerPriority) {
+    if (result.length < maxResults) {
+      result.push(id);
+    }
+  }
+  for (const id of lowestPriority) {
     if (result.length < maxResults) {
       result.push(id);
     }
@@ -4371,6 +4381,9 @@ class Idc {
     const partialLead = (leader, ping) => leader.atk(ping, monsters, percent, this.combos, this.effects.skillUsed, MP, healing);
     // Apply leader skills.
     for (const ping of pings) {
+      // Use single-precision float rounding for these. Although less mathematically accurate,
+      // this is closer to what happens in-game. e.g.
+      // Amun multipliers can sometimes cause weird numbers like 1,269,000,064.
       let val = ping.amount;
       val = Math.fround(val) * Math.fround(partialLead(lead, ping) * 100) / Math.fround(100);
       val = Math.fround(Math.fround(val) * partialLead(helper, ping) * 100) / Math.fround(100);
@@ -4978,8 +4991,11 @@ class Idc {
         return;
       }
       options.style.display = 'block';
-      const fuzzyMatches = fuzzyMonsterSearch(currentText, maxResults, prioritizedInheritSearch);
-      for (let i = 0; i < fuzzyMatches.length && i < maxResults; i++) {
+      const inheritances = [InheritanceType.Assistance1, InheritanceType.Assistance2];
+      const fuzzyMatches = fuzzyMonsterSearch(currentText, maxResults * 5, prioritizedInheritSearch)
+          .filter((id) => inheritances.includes(vm.model.cards[id].inheritanceType))
+          .slice(0, maxResults);
+      for (let i = 0; i < fuzzyMatches.length; i++) {
         const option = document.getElementById(`idc-inherit-select-option-${i}`);
         const key = fuzzyMatches[i];
         option.innerText = `${key} - ${vm.model.cards[key].name}`;
