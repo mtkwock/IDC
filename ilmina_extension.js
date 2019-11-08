@@ -1742,6 +1742,7 @@ class DungeonInstance {
 
   addFloor() {
     this.floors.push(new DungeonFloor());
+    this.activeFloor = this.floors.length - 1;
     this.reloadEditorElement();
   }
 
@@ -4048,7 +4049,7 @@ class Idc {
       }
     }
     let totalHp = 0;
-    const teamHpAwakeningsMult = 1 + this.effects.awakenings ? (monsters.reduce((total, monster) => total + monster.countAwakening(IdcAwakening.TEAM_HP), 0) * 0.05) : 0;
+    const teamHpAwakeningsMult = 1 + (this.effects.awakenings ? (monsters.reduce((total, monster) => total + monster.countAwakening(IdcAwakening.TEAM_HP), 0) * 0.05) : 0);
     for (const monster of monsters) {
       if (!monster.id || monster.id <= 0) {
         continue;
@@ -4067,7 +4068,7 @@ class Idc {
     const lead = getLeaderSkillEffects(monsters[0].getCard().leaderSkillId).rcv;
     const helper = getLeaderSkillEffects(monsters[5].getCard().leaderSkillId).rcv;
     let totalRcv = 0;
-    const teamRcvAwakeningsMult = 1 + this.effects.awakenings ? (monsters.reduce((total, monster) => total + monster.countAwakening(IdcAwakening.TEAM_RCV), 0) * 0.1) : 0;
+    const teamRcvAwakeningsMult = 1 + (this.effects.awakenings ? (monsters.reduce((total, monster) => total + monster.countAwakening(IdcAwakening.TEAM_RCV), 0) * 0.1) : 0);
     for (const monster of monsters) {
       if (!monster.id || monster.id <= 0) {
         continue;
