@@ -1356,10 +1356,10 @@ function atkAndShieldFromMinColorMatch(params) {
 
   return createLeaderSkill({
     atk: (ping, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-      return didActivate(comboContainer) ? atk100 / 100 : 1;
+      return didActivate(team, comboContainer) ? atk100 / 100 : 1;
     },
     damageMult: (enemy, team, percentHp, comboContainer, skillUsed, isMultiplayer) => {
-      return didActivate(comboContainer) ? 1 - (shield / 100) : 1;
+      return didActivate(team, comboContainer) ? 1 - (shield / 100) : 1;
     },
   });
 }

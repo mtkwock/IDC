@@ -140,7 +140,7 @@ function scalingAttackToSingleEnemy(params) {
       ping.source = source;
       ping.attribute = source.getAttribute();
       ping.amount = source.getAtk(isMultiplayer, awakeningsActive);
-      ping.multiply(atk100base, Round.UP);
+      ping.multiply(atk100base / 100, Round.UP);
       ping.isActive = true;
 
       if (atk100max != atk100base) {
@@ -386,6 +386,7 @@ function scalingAttackRandomToAllEnemies(params) {
     description: `Mass ${minMult / 100}-${maxMult / 100}x ${AttributeToName[attr]} Attack.`,
     damage: (source, team, awakeningsActive, isMultiplayer) => {
       const ping = new DamagePing();
+      ping.amount = source.getAtk(isMultiplayer, awakeningsActive);
       ping.attribute = attr;
       ping.source = source;
       ping.isActive = true;

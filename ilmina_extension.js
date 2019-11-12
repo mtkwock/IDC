@@ -211,12 +211,15 @@ class MonsterInstance {
     if (this.inheritId in vm.model.cards) {
       string += ` (${this.inheritId}`;
       if (this.getInheritCard().attribute == card.attribute) {
-        string += ' |';
+        let stats = ' |';
         if (this.inheritLevel != 1) {
-          string += ` lv${this.inheritLevel}`;
+          stats += ` lv${this.inheritLevel}`;
         }
         if (this.inheritPlussed) {
-          string += ' +297';
+          stats += ' +297';
+        }
+        if (stats.length > 2) {
+          string += stats
         }
       }
       string += ')'
@@ -243,21 +246,25 @@ class MonsterInstance {
       string = string.substring(0, string.length - 1) + ']';
     }
 
-    string += ' |';
+    let stats = ' |';
 
     if (this.level != card.maxLevel) {
-      string += ` lv${this.level} `
+      stats += ` lv${this.level} `
     }
     if (this.awakenings != card.awakenings.length) {
-      string += `aw${this.awakenings}`;
+      stats += `aw${this.awakenings}`;
     }
     if (this.hpPlus != 99 || this.atkPlus != 99 || this.rcvPlus != 99) {
-      string += ` +H${this.hpPlus} +A${this.atkPlus} +R${this.rcvPlus}`;
+      stats += ` +H${this.hpPlus} +A${this.atkPlus} +R${this.rcvPlus}`;
     }
 
     if (this.superAwakeningIdx >= 0) {
-      string += ` sa${this.superAwakeningIdx + 1}`;
+      stats += ` sa${this.superAwakeningIdx + 1}`;
     }
+    if (stats.length > 2) {
+      string += stats
+    }
+
     return string;
   }
 
