@@ -183,19 +183,32 @@ class MonsterInstance {
   }
 
   toJson() {
-    return {
-      id: this.id,
-      level: this.level,
-      awakenings: this.awakenings,
-      latents: [...this.latents],
-      superAwakeningIdx: this.superAwakeningIdx,
-      hpPlus: this.hpPlus,
-      atkPlus: this.atkPlus,
-      rcvPlus: this.rcvPlus,
-      inheritId: this.inheritId,
-      inheritLevel: this.inheritLevel,
-      inheritPlussed: this.inheritPlussed,
+    const json = {};
+    if (this.id >= 0) {
+      json.id = this.id;
+
+      if (this.level > 1) {
+        json.level = this.level;
+      }
+      json.awakenings = this.awakenings;
+      json.latents = [...this.latents];
+      json.superAwakeningIdx = this.superAwakeningIdx;
+      if (this.hpPlus) {
+        json.hpPlus = this.hpPlus;
+      }
+      if (this.atkPlus) {
+        json.atkPlus = this.atkPlus;
+      }
+      if (this.rcvPlus) {
+        json.rcvPlus = this.rcvPlus;
+      }
+      if (this.inheritId >= 0) {
+        json.inheritId = this.inheritId;
+        json.inheritLevel = this.inheritLevel;
+        json.inheritPlussed = this.inheritPlussed;
+      }
     }
+    return json;
   }
 
   toPdchu() {
@@ -446,11 +459,22 @@ class MonsterInstance {
   }
 
   setId(value) {
-    if (!(value in vm.model.cards)) {
+    if (value >= 0 && !(value in vm.model.cards)) {
       console.warn('Invalid monster id: ' + String(value));
       return;
     }
     this.id = value;
+    if (value == -1) {
+      this.level = 1;
+      this.awakenings = 0;
+      this.latents.length = 0;
+      this.superAwakeningIdx = -1;
+      this.setHpPlus(0);
+      this.setAtkPlus(0);
+      this.setRcvPlus(0);
+      this.card = vm.model.cards[4014];
+      return;
+    }
     const c = this.getCard();
 
     // If the level is above the max level of the new card OR
@@ -974,7 +998,8 @@ class MonsterInstance {
   }
 
   updateIcon(monsterEl, playerMode = 1, scaling = teamScaling) {
-    const card = this.id ? this.getCard() : vm.model.cards[4014];
+    const card = this.id > 0 ? this.getCard() : vm.model.cards[4014];
+    monsterEl.style.visibility = this.id != -1 ? 'visible' : 'hidden';
 
     const fullWidth = `${102 * scaling}px`;
 
@@ -989,9 +1014,14 @@ class MonsterInstance {
     const descriptionAttribute = CardUiAssets.getIconFrame(card.attribute, false, vm);
     attributeEl.style.width = fullWidth;
     attributeEl.style.height = fullWidth;
-    attributeEl.style.backgroundSize = `${512 * scaling}px ${256 * scaling}px`;
-    attributeEl.style.backgroundImage = `url(${descriptionAttribute.url})`;
-    attributeEl.style.backgroundPosition = `-${descriptionAttribute.offsetX * scaling}px -${descriptionAttribute.offsetY * scaling}px`;
+    if (this.id != -1) {
+      attributeEl.style.backgroundSize = `${512 * scaling}px ${256 * scaling}px`;
+      attributeEl.style.backgroundImage = `url(${descriptionAttribute.url})`;
+      attributeEl.style.backgroundPosition = `-${descriptionAttribute.offsetX * scaling}px -${descriptionAttribute.offsetY * scaling}px`;      
+      attributeEl.style.visibility = 'visible';
+    } else {
+      attributeEl.style.visibility = 'hidden';
+    }
 
     const descriptionSubattribute = CardUiAssets.getIconFrame(card.subattribute, true, vm);
     const subattributeEl = monsterEl.getElementsByClassName('idc-monster-icon-subattribute')[0];
@@ -1023,7 +1053,7 @@ class MonsterInstance {
     const superIconScale = 0.50;
     let awakening = 0;
     if (this.superAwakeningIdx < 0) {
-        superAwakeningEl.style.display = 'none';
+      superAwakeningEl.style.display = 'none';
     } else {
       superAwakeningEl.style.display = 'inline-block';
       const awakening = card.superAwakenings[this.superAwakeningIdx];
@@ -1061,6 +1091,7 @@ MonsterInstance.fromJson = function(json) {
   monster.superAwakeningIdx = json.superAwakeningIdx >= 0 ? json.superAwakeningIdx : -1;
   monster.hpPlus = json.hpPlus || 0;
   monster.atkPlus = json.atkPlus || 0;
+  monster.rcvPlus = json.rcvPlus || 0;
   monster.inheritId = json.inheritId || -1;
   monster.inheritLevel = json.inheritLevel || 1;
   monster.inheritPlussed = json.inheritPlussed || false;
@@ -3497,6 +3528,9 @@ function loadMonsterSearches() {
  * @returns {!Array<number>}
  */
 function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined, filtered = false) {
+  if (!text || text == '-1') {
+    return [-1];
+  }
   searchArray = searchArray || prioritizedMonsterSearch;
   text = text.toLowerCase();
   let toEquip = false;
@@ -3654,6 +3688,9 @@ function fuzzyMonsterSearch(text, maxResults = 15, searchArray = undefined, filt
     for (const id of equips) {
       result.push(id);
     }
+  }
+  if (!result.length) {
+    return [-1];
   }
   return result;
 }
@@ -4643,7 +4680,7 @@ class Idc {
     const rcvPlusSetting = document.getElementById('idc-rcv-plus-monster');
     const activeMonster = this.monsters[this.monsterEditingIndex];
     if (activeMonster.id != null) {
-      monsterSelector.value = activeMonster.getCard().name;
+      monsterSelector.value = activeMonster.id != -1 ? activeMonster.getCard().name : '';
       levelSelector.value = activeMonster.level;
       hpPlusSetting.value = activeMonster.hpPlus;
       atkPlusSetting.value = activeMonster.atkPlus;
@@ -4912,7 +4949,7 @@ class Idc {
       option.onclick = () => {
         options.style.display = 'none';
         // monsterSelector.value = option.value;
-        this.monsters[this.monsterEditingIndex].setId(option.value);
+        this.monsters[this.monsterEditingIndex].setId(Number(option.value));
         this.reloadTeamIcons();
         this.reloadMonsterEditor();        
       }
@@ -4931,6 +4968,7 @@ class Idc {
       }
       const currentText = e.target.value.toLowerCase();
       if (currentText == '') {
+        document.getElementById(`idc-monster-select-option-0`).value = -1;
         options.style.display = 'none';
         return;
       }
@@ -4939,7 +4977,7 @@ class Idc {
       for (let i = 0; i < fuzzyMatches.length && i < maxResults; i++) {
         const option = document.getElementById(`idc-monster-select-option-${i}`);
         const key = fuzzyMatches[i];
-        option.innerText = `${key} - ${vm.model.cards[key].name}`;
+        option.innerText = key >= 0 ? `${key} - ${vm.model.cards[key].name}` : 'None';
         option.value = key;
         option.style.display = 'block';
       }
@@ -4981,9 +5019,11 @@ class Idc {
         options.style.display = 'none';
         // inheritSelector.value = option.value;
         const monster = this.monsters[this.monsterEditingIndex];
-        monster.inheritId = option.value;
-        monster.inheritPlussed = true;
-        monster.inheritLevel = vm.model.cards[option.value].isLimitBreakable ? 110 : vm.model.cards[option.value].maxLevel;
+        monster.inheritId = Number(option.value);
+        if (monster.inheritId > 0) {
+          monster.inheritPlussed = true;
+          monster.inheritLevel = vm.model.cards[option.value].isLimitBreakable ? 110 : vm.model.cards[option.value].maxLevel;
+        }
         this.reloadTeamIcons();
         this.reloadMonsterEditor();  
       }
@@ -4992,27 +5032,22 @@ class Idc {
     inheritSelector.onkeyup = (e) => {
       if (e.keyCode == 13) {
         document.getElementById(`idc-inherit-select-option-0`).click();
-        // console.log(`Changing monster inherit ${this.monsterEditingIndex} id to ${value}`);
-        // this.monsters[this.monsterEditingIndex].inheritId = value;
-        // this.reloadTeamIcons();
-        // this.reloadMonsterEditor();
-        // options.style.display = 'none';
-        // return;
       }
       const currentText = e.target.value.toLowerCase();
       if (currentText == '') {
+        document.getElementById(`idc-inherit-select-option-0`).value = -1;
         options.style.display = 'none';
         return;
       }
       options.style.display = 'block';
       const inheritances = [InheritanceType.Assistance1, InheritanceType.Assistance2];
       const fuzzyMatches = fuzzyMonsterSearch(currentText, maxResults * 5, prioritizedInheritSearch)
-          .filter((id) => inheritances.includes(vm.model.cards[id].inheritanceType))
+          .filter((id) => id == -1 || inheritances.includes(vm.model.cards[id].inheritanceType))
           .slice(0, maxResults);
       for (let i = 0; i < fuzzyMatches.length; i++) {
         const option = document.getElementById(`idc-inherit-select-option-${i}`);
         const key = fuzzyMatches[i];
-        option.innerText = `${key} - ${vm.model.cards[key].name}`;
+        option.innerText = key >= 0 ? `${key} - ${vm.model.cards[key].name}` : 'None';
         option.value = key;
         option.style.display = 'block';
       }
