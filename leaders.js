@@ -1198,8 +1198,8 @@ function atkRcvFromColorMatches(params) {
   }
 
   return createLeaderSkill({
-    atk: (ping, team, percentHp, comboContainer) => getMultiplier(team, comboContainer, atk100),
-    rcvPost: (monster, team, percentHp, comboContainer) => getMultiplier(team, comboContainer, rcv100),
+    atk: (ping, team, percentHp, comboContainer) => getMultiplier(team, comboContainer, atk),
+    rcvPost: (monster, team, percentHp, comboContainer) => getMultiplier(team, comboContainer, rcv),
   });
 }
 
