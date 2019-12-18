@@ -1310,7 +1310,7 @@ const TypeToLatent = {
   9: -1,
   10: -1,
   11: -1,
-  12: Latent.AWAKENING,
+  12: Latent.AWOKEN,
   13: -1,
   14: Latent.ENHANCED,
   15: Latent.REDEEMABLE,
@@ -4086,17 +4086,27 @@ class Idc {
     const monsters = this.getActiveTeam();
     const lead = getLeaderSkillEffects(monsters[0].getCard().leaderSkillId).hp;
     const helper = getLeaderSkillEffects(monsters[5].getCard().leaderSkillId).hp;
+    const teamHpAwakeningsMult1 = this.effects.awakenings ? (monsters.reduce((total, monster) => total + monster.countAwakening(IdcAwakening.TEAM_HP), 0) * 0.05) : 0;
+    let teamHpAwakeningsMult2 = 0;
     if (this.playerMode == 2) {
       const p2Monsters = this.getTeamAt(this.activeTeamIdx ^ 1);
       for (let i = 1; i < 5; i++) {
         monsters.push(p2Monsters[i]);
       }
+      teamHpAwakeningsMult2 = this.effects.awakenings ? (p2Monsters.reduce((total, monster) => total + monster.countAwakening(IdcAwakening.TEAM_HP), 0) * 0.05) : 0;
     }
     let totalHp = 0;
-    const teamHpAwakeningsMult = 1 + (this.effects.awakenings ? (monsters.reduce((total, monster) => total + monster.countAwakening(IdcAwakening.TEAM_HP), 0) * 0.05) : 0);
-    for (const monster of monsters) {
+    for (let i = 0; i < monsters.length; i++) {
+      const monster = monsters[i];
       if (!monster.id || monster.id <= 0) {
         continue;
+      }
+      let teamHpAwakeningsMult = 1;
+      if (i <= 5) {
+        teamHpAwakeningsMult += teamHpAwakeningsMult1;
+      }
+      if (i == 0 || i >= 5) {
+        teamHpAwakeningsMult += teamHpAwakeningsMult2;
       }
       const hpMult = (
           lead(monster, monsters, this.isMultiplayer()) * 
