@@ -1449,6 +1449,14 @@ class EnemyInstance {
     }
 
     if (ping.attribute != -1) {
+      // Defense + Guard Break, Damage afterward is minimum 1.
+      if ((ping.source.countAwakening(IdcAwakening.GUARD_BREAK) == 0 ||
+              (new Set(pings.map((ping) => ping.attribute))).size < 5)) {
+        const defense = this.defense * (100 - this.ignoreDefensePercent) / 100;
+        currentDamage -= defense;
+        currentDamage = Math.ceil(currentDamage);
+      }
+
       // Innate Resists (e.g. attribute and type)
       if (this.attributesResisted.includes(ping.attribute)) {
         currentDamage *= 0.5;
@@ -1463,15 +1471,8 @@ class EnemyInstance {
       currentDamage = currentDamage * (100 - this.shieldPercent) / 100
       currentDamage = Math.ceil(currentDamage);
 
-      // Defense + Guard Break, Damage afterward is minimum 1.
-      if ((ping.source.countAwakening(IdcAwakening.GUARD_BREAK) == 0 ||
-              (new Set(pings.map((ping) => ping.attribute))).size < 5)) {
-        const defense = this.defense * (100 - this.ignoreDefensePercent) / 100;
-        currentDamage -= defense;
-        currentDamage = Math.ceil(currentDamage);
-
-        currentDamage = Math.max(currentDamage, 1);
-      }
+      // Damage after this step floors at 1.
+      currentDamage = Math.max(currentDamage, 1);
     }
 
     // Void
