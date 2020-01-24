@@ -1477,9 +1477,10 @@ class EnemyInstance {
 
     // Void
     if (this.damageVoid
-        && currentDamage > this.damageVoid
+        && currentDamage >= this.damageVoid
         && !voids.damageVoid
-        && (!(COLORS[ping.attribute] in comboContainer.combos) ||
+        && (ping.source.countAwakening(IdcAwakening.VDP) == 0 ||
+            !(COLORS[ping.attribute] in comboContainer.combos) ||
             comboContainer.combos[COLORS[ping.attribute]].every((combo) => combo.shape != Shape.BOX))) {
       currentDamage = 0;
     }
