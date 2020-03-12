@@ -1655,7 +1655,7 @@ function trueBonusFromColorMatches(params) {
 
   return createLeaderSkill({
     trueBonusAttack: (monster, team, percentHp, comboContainer) => {
-      return attrs.filter((attr) => comboContainer[COLORS[attr]].length > 0).length >= minCount ? damage : 0;
+      return attrs.filter((attr) => comboContainer.combos[COLORS[attr]].length > 0).length >= minCount ? damage : 0;
     },
   });
 }
