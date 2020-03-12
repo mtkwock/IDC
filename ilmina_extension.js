@@ -881,7 +881,7 @@ class MonsterInstance {
 
   updateLatentsIcon(monsterEl, scaling = teamScaling) {
     const fullScale = scaling * MONSTER_AWAKENING_SCALE;
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const latentEl = monsterEl.getElementsByClassName(`idc-monster-icon-latent-${i}`)[0];
       if (i >= this.latents.length) {
         latentEl.style.opacity = '0';
