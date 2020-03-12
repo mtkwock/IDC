@@ -1,6 +1,6 @@
 {
 const AWAKENING_SCALE = 0.7;
-const MONSTER_AWAKENING_SCALE = 0.43;
+const MONSTER_AWAKENING_SCALE = 0.43 * 1.48;
 const AWAKENING_NUMBERS = '0123456789';
 let teamScaling = 0.6;
 
@@ -525,6 +525,10 @@ class MonsterInstance {
     this.card = c;
   }
 
+  maxLatents() {
+    return this.getCard().inheritanceType & 32 ? 8 : 6;
+  }
+
   addLatent(latent) {
     const c = this.getCard();
     // Only monsters capable of taking latent killers can take latents.
@@ -534,7 +538,7 @@ class MonsterInstance {
     const totalSlots = [...this.latents, latent].reduce((total, latent) => {
       return total + (LatentSuper.has(latent) ? 2 : 1);
     }, 0);
-    if (totalSlots > 6) return false;
+    if (totalSlots > this.maxLatents()) return false;
     if (latent >= 16 && latent <= 23 && !c.latentKillers.includes(latent - 11)) {
       return;
     }
@@ -853,10 +857,10 @@ class MonsterInstance {
 
   createLatentsIcon(scaling = teamScaling) {
     const latentsEl = document.createElement('div');
-    latentsEl.style.height = `${36 * scaling * MONSTER_AWAKENING_SCALE}px`;
-    // const singleRow = document.createElement('tr');
+    latentsEl.style.height = `${2 * 36 * scaling * MONSTER_AWAKENING_SCALE}px`;
+    latentsEl.style.maxWidth = '62px';
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       // const cell = document.createElement('td');
       const latentEl = document.createElement('a');
       latentEl.className = `idc-monster-icon-latent-${i}`;
@@ -3471,7 +3475,7 @@ let prefixToCardIds = {};
 function loadMonsterSearches() {
   prioritizedEnemySearch = Object.values(vm.model.cards).reverse();
   prioritizedMonsterSearch = Object.values(vm.model.cards).filter((card) => {
-    return Number(card.id) < 6000;
+    return Number(card.id) < 10000;
   }).sort((card1, card2) => {
     if (card2.awakenings[0] == IdcAwakening.AWOKEN_ASSIST) {
       return -1;
@@ -4631,9 +4635,10 @@ class Idc {
     // Latent Awakenings.
 
     let totalLatents = 0;
-    for (let i = 0; i < 6; i++) {
+    let max_latents = activeMonster.getCard().inheritanceType & 32 ? 8 : 6;
+    for (let i = 0; i < 8; i++) {
       const currentLatentSelector = document.getElementById(`idc-selected-latent-awakening-${i}`);
-      if (totalLatents >= 6) {
+      if (totalLatents >= max_latents) {
         currentLatentSelector.style.backgroundPosition = `0px 0px`;
         currentLatentSelector.style.display = 'none';
         continue;
@@ -5054,7 +5059,7 @@ class Idc {
       options.style.display = 'block';
       const inheritances = [InheritanceType.Assistance1, InheritanceType.Assistance2];
       const fuzzyMatches = fuzzyMonsterSearch(currentText, maxResults * 5, prioritizedInheritSearch)
-          .filter((id) => id == -1 || inheritances.includes(vm.model.cards[id].inheritanceType))
+          .filter((id) => id == -1 || vm.model.cards[id].inheritanceType & 1)
           .slice(0, maxResults);
       for (let i = 0; i < fuzzyMatches.length; i++) {
         const option = document.getElementById(`idc-inherit-select-option-${i}`);
@@ -5260,7 +5265,7 @@ class Idc {
     const latentAwakeningEditor = document.createElement('div');
     latentAwakeningEditor.appendChild(document.createTextNode('Latents: '));
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const currentLatentSelector = document.createElement('a');
       currentLatentSelector.id = `idc-selected-latent-awakening-${i}`;
       currentLatentSelector.style.display = 'none';
@@ -5662,7 +5667,7 @@ class Idc {
       let awakeningCategory = awakeningsToDisplay[i];
       let awakening = awakeningCategory[0];
 
-      let doubled = false;
+      // let doubled = false;
       const container = document.createElement('div');
       container.style.display = 'inline-block';
       const awakeningIcon = document.createElement('a');

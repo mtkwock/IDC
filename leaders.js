@@ -1222,7 +1222,7 @@ function atkRcvScalingFromOneColorMatches(params) {
     if (c < minColors) {
       return 1;
     }
-    return ((c - minColors) * scale100 + base100) / 100;
+    return ((c - minColors) * (scale100 || 0) + base100) / 100;
   }
 
   return createLeaderSkill({
