@@ -1492,7 +1492,7 @@ class EnemyInstance {
     // Absorbs
     if (this.attributeAbsorb.includes(ping.attribute) && !voids.attributeAbsorb ||
         this.damageAbsorb && currentDamage >= this.damageAbsorb && !voids.damageAbsorb ||
-        this.comboAbsorb && comboContainer.comboCount() <= this.comboAbsorb && !ping.isActive) {
+        comboContainer && this.comboAbsorb && comboContainer.comboCount() <= this.comboAbsorb && !ping.isActive) {
       currentDamage *= -1;
     }
 
