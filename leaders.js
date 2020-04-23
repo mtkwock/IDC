@@ -373,7 +373,7 @@ function coinBoost(params) {
 function atkScalingFromMatchedColors(params) {
   let [attrBits, minColors, atk100base, atk100scale, maxColors] = params;
   atk100scale = atk100scale || 0;
-  maxColors = maxColors || minColors;
+  maxColors = (maxColors && minColors + maxColors) || minColors;
   const attrs = idxsFromBits(attrBits);
 
   return createLeaderSkill({
