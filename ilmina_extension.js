@@ -1552,13 +1552,13 @@ class EnemyInstance {
       obj.id = this.id;
       card = vm.model.cards[this.id];
     }
-    if (this.maxHp > 1 && this.maxHp != card.unknownData[7]) {
+    if (this.maxHp > 1 && this.maxHp != card.enemyHpAtLv10) {
       obj.maxHp = this.maxHp;
     }
-    if (this.attack > 1 && this.attack != card.unknownData[10]) {
+    if (this.attack > 1 && this.attack != card.enemyAtkAtLv10) {
       obj.attack = this.attack;
     }
-    if (this.defense && this.defense != card.unknownData[13]) {
+    if (this.defense && this.defense != card.enemyDefAtLv10) {
       obj.defense = this.defense;
     }
     if (this.resolvePercent > 0) {
@@ -1591,9 +1591,9 @@ EnemyInstance.fromJson = (json) =>{
   instance.id = Number(json.id) || -1;
   if (instance.id in vm.model.cards) {
     const card = vm.model.cards[instance.id];
-    instance.maxHp = Number(json.maxHp) || card.unknownData[7];
-    instance.attack = Number(json.attack) || card.unknownData[10];
-    instance.defense = Number(json.defense) || card.unknownData[13];
+    instance.maxHp = Number(json.maxHp) || card.enemyHpAtLv10;
+    instance.attack = Number(json.attack) || card.enemyAtkAtLv10;
+    instance.defense = Number(json.defense) || card.enemyDefAtLv10;
   } else {
     instance.maxHp = Number(json.maxHp) || 1;
     instance.attack = Number(json.attack) || 1;
@@ -1832,9 +1832,9 @@ class DungeonInstance {
         if (value in vm.model.cards) {
           const card = vm.model.cards[value];
           // Hopefully good defaults.  May change!
-          enemy.maxHp = card.unknownData[7];
-          enemy.attack = card.unknownData[10];
-          enemy.defense = card.unknownData[13];
+          enemy.maxHp = card.enemyHpAtLv10;
+          enemy.attack = card.enemyAtkAtLv10;
+          enemy.defense = card.enemyDefAtLv10;
         }
         enemy.reset();
         this.reloadEditorElement();
@@ -1851,9 +1851,9 @@ class DungeonInstance {
         if (value in vm.model.cards) {
           const card = vm.model.cards[value];
           // Hopefully good defaults.  May change!
-          enemy.maxHp = card.unknownData[7];
-          enemy.attack = card.unknownData[10];
-          enemy.defense = card.unknownData[13];
+          enemy.maxHp = card.enemyHpAtLv10;
+          enemy.attack = card.enemyAtkAtLv10;
+          enemy.defense = card.enemyDefAtLv10;
         }
         options.style.display = 'none';
         enemy.reset();
