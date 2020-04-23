@@ -800,9 +800,10 @@ function atkFromAttrTypeAboveHp(params) {
 }
 
 // 124
-function atkScalingFromMatchedColors(params) {
+function atkScalingFromMatchedColorsSeparated(params) {
   let [attr1bit, attr2bit, attr3bit, attr4bit, attr5bit, minMatch, atk100base, atk100scale] = params;
   atk100scale = atk100scale || 0;
+  minMatch = minMatch || 0;
   const maxCounts = {};
   for (const attrBit of [attr1bit, attr2bit, attr3bit, attr4bit, attr5bit].filter((bit) => bit > 0)) {
     const attr = idxsFromBits(attrBit)[0];
@@ -1745,7 +1746,7 @@ const LEADER_SKILL_GENERATORS = {
   121: baseStatFromAttrType,
   122: atkRcvFromSubHp,
   123: atkFromAttrTypeAboveHp,
-  124: atkScalingFromMatchedColors,
+  124: atkScalingFromMatchedColorsSeparated,
   125: baseStateFromRequiredSubs,
   129: baseStatFromAttributeType,
   130: atkRcvColorShieldFromSubHp,
